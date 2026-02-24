@@ -1,0 +1,21 @@
+# Agent-generated output directories
+generations/
+
+# Log files
+logs/
+
+# Environment and secrets
+.env
+.env.*
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Claude Code local config
+.claude/

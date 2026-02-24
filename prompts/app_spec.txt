@@ -1,0 +1,44 @@
+# [Your App Name Here]
+
+## Overview
+Describe what your application does in 2-3 sentences.
+
+## Technology Stack
+- List the languages, frameworks, and tools to use
+- Be specific (e.g., "Node.js HTTP server using only built-in modules" not just "Node")
+
+## Features
+
+### 1. [Feature Name]
+- What it does
+- Any specific requirements (colours, sizes, behaviour)
+
+### 2. [Feature Name]
+- What it does
+- Any specific requirements
+
+### 3. [Feature Name]
+- What it does
+- Any specific requirements
+
+(Add as many features as you need)
+
+## File Structure
+```
+List the files and folders you expect, e.g.:
+server.js       - HTTP server
+index.html      - Main page
+style.css       - Styles
+app.js          - Application logic
+```
+
+## How to Run
+```bash
+Describe how to start the application, e.g.:
+node server.js
+# Open http://localhost:3000
+```
+
+## Notes
+- Any constraints, preferences, or things the agent should know
+- e.g., "No external dependencies" or "Must work on mobile"
