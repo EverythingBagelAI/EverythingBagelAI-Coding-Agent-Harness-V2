@@ -1,44 +1,31 @@
-# [Your App Name Here]
+# Claude.ai Clone - AI Chat Interface Project Specification
 
-## Overview
-Describe what your application does in 2-3 sentences.
+This is a comprehensive project specification for building a fully functional clone of claude.ai with the following key components:
 
-## Technology Stack
-- List the languages, frameworks, and tools to use
-- Be specific (e.g., "Node.js HTTP server using only built-in modules" not just "Node")
+## Core Technology Stack
+- **Frontend**: React with Vite, Tailwind CSS, React Router, React Markdown
+- **Backend**: Node.js with Express, SQLite database, Anthropic SDK
+- **Communication**: RESTful API with Server-Sent Events for streaming
 
-## Features
+## Primary Features
 
-### 1. [Feature Name]
-- What it does
-- Any specific requirements (colours, sizes, behaviour)
+**Chat Interface**: The specification calls for "clean, centered chat layout with message bubbles" including streaming responses, markdown rendering, code syntax highlighting, LaTeX support, and image uploads.
 
-### 2. [Feature Name]
-- What it does
-- Any specific requirements
+**Artifacts System**: Artifact detection and side-panel rendering supporting code, HTML/SVG, React components, Mermaid diagrams, and text documents with versioning.
 
-### 3. [Feature Name]
-- What it does
-- Any specific requirements
+**Conversation Management**: Full CRUD operations with search, pinning, archiving, folders, export capabilities, and timestamp tracking.
 
-(Add as many features as you need)
+**Model Selection**: Support for Claude Sonnet 4.5, Haiku 4.5, and Opus 4.1 with capabilities display and context window indicators.
 
-## File Structure
-```
-List the files and folders you expect, e.g.:
-server.js       - HTTP server
-index.html      - Main page
-style.css       - Styles
-app.js          - Application logic
-```
+**Projects**: Project creation for grouping conversations with custom instructions, knowledge bases, and settings.
 
-## How to Run
-```bash
-Describe how to start the application, e.g.:
-node server.js
-# Open http://localhost:3000
-```
+**Advanced Features**: Temperature control, token adjustments, thinking modes, multi-modal input, response suggestions, and conversation branching.
 
-## Notes
-- Any constraints, preferences, or things the agent should know
-- e.g., "No external dependencies" or "Must work on mobile"
+## Database Structure
+The schema includes 11+ tables: users, projects, conversations, messages, artifacts, shared conversations, prompt library, folders, usage tracking, and API keys—each with appropriate fields for comprehensive data management.
+
+## Implementation Approach
+A 9-step development plan progresses from foundation setup through database creation, core chat interface, conversation management, artifacts, projects, advanced features, settings, sharing/collaboration, and final optimization.
+
+## Success Metrics
+Focus areas include functional streaming and artifacts, intuitive user experience matching claude.ai's design, responsive mobile compatibility, clean code structure, and professional visual polish with dark mode support.
