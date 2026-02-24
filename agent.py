@@ -232,7 +232,7 @@ async def run_autonomous_agent(
             print("\n" + "=" * 70)
             print("  PROJECT COMPLETE")
             print("=" * 70)
-            print("\nAll Linear issues marked Done. app_complete = true")
+            print("\nAll non-META Linear issues are Done.")
             print_progress_summary(project_dir)
             break
 

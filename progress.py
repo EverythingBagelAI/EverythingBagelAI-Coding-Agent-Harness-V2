@@ -7,6 +7,8 @@ Progress is tracked via Linear issues, with local state cached in .linear_projec
 """
 
 import json
+import os
+import subprocess
 from pathlib import Path
 
 from linear_config import LINEAR_PROJECT_MARKER
@@ -83,17 +85,78 @@ def print_progress_summary(project_dir: Path) -> None:
 
 def is_project_complete(project_dir: Path) -> bool:
     """
-    Check if the project is marked as complete in .linear_project.json.
+    Check if all non-META issues in the Linear project are Done.
 
-    The coding agent sets "app_complete": true when all issues are Done.
+    Queries the Linear API directly rather than relying on the agent
+    to self-report completion. META issues are excluded from the check
+    since they stay in Backlog as tracking issues.
+
+    Falls back to checking .linear_project.json if the API call fails.
 
     Args:
         project_dir: Directory containing .linear_project.json
 
     Returns:
-        True if the project is marked complete
+        True if all non-META issues are Done
     """
     state = load_linear_project_state(project_dir)
     if state is None:
         return False
-    return state.get("app_complete", False) is True
+
+    project_id = state.get("project_id")
+    if not project_id:
+        # No project ID — fall back to local flag
+        return state.get("app_complete", False) is True
+
+    api_key = os.environ.get("LINEAR_API_KEY", "")
+    if not api_key:
+        return state.get("app_complete", False) is True
+
+    # Query Linear for all issues in this project
+    query = json.dumps({
+        "query": (
+            '{ issues(filter: { project: { id: { eq: "%s" } } }) '
+            '{ nodes { title state { name } } } }' % project_id
+        )
+    })
+
+    try:
+        result = subprocess.run(
+            [
+                "curl", "-s", "-X", "POST",
+                "https://api.linear.app/graphql",
+                "-H", f"Authorization: {api_key}",
+                "-H", "Content-Type: application/json",
+                "-d", query,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+
+        if result.returncode != 0:
+            return state.get("app_complete", False) is True
+
+        data = json.loads(result.stdout)
+        issues = data.get("data", {}).get("issues", {}).get("nodes", [])
+
+        if not issues:
+            return False
+
+        # Filter out META issues and check if all remaining are Done
+        non_meta = [i for i in issues if not i["title"].startswith("[META]")]
+
+        if not non_meta:
+            return False
+
+        all_done = all(i["state"]["name"] == "Done" for i in non_meta)
+
+        if all_done:
+            done_count = len(non_meta)
+            print(f"\n  Linear check: {done_count}/{done_count} non-META issues Done")
+
+        return all_done
+
+    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError):
+        # API failed — fall back to local flag
+        return state.get("app_complete", False) is True
