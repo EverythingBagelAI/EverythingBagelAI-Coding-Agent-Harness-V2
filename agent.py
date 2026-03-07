@@ -8,7 +8,6 @@ Supports standard mode (greenfield/brownfield) and epic mode.
 
 import asyncio
 import json
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -33,17 +32,15 @@ from prompts import (
     build_epic_initializer_context,
     copy_spec_to_project,
 )
+from config import SESSION_TIMEOUT_SECONDS
 from security import configure_allowed_commands
 
 
 # Configuration
 AUTO_CONTINUE_DELAY_SECONDS = 3
 
-# Session types
-SESSION_INITIALIZER = "initializer"
-SESSION_BROWNFIELD_INITIALIZER = "brownfield_initializer"
-SESSION_EPIC_INITIALIZER = "epic_initializer"
-SESSION_CODING_AGENT = "coding_agent"
+# Session type strings: "initializer", "brownfield_initializer", "epic_initializer",
+# "coding", "architect", "standard". Used as keys in SESSION_MCP_SCOPES (discovery.py).
 
 
 async def run_agent_session(
@@ -143,6 +140,25 @@ def _log_session_cost(result_msg) -> None:
         print(f"\n  Session stats: {' | '.join(parts)}")
 
 
+async def run_agent_session_with_timeout(
+    client,
+    message: str,
+    project_dir: Path,
+) -> tuple[str, str]:
+    """Wrap run_agent_session with a configurable timeout."""
+    try:
+        return await asyncio.wait_for(
+            run_agent_session(client, message, project_dir),
+            timeout=SESSION_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        print(
+            f"\n  Agent session timed out after {SESSION_TIMEOUT_SECONDS // 60} minutes. "
+            "The issue may be too complex or the agent is stuck."
+        )
+        return "error", "Session timed out"
+
+
 async def run_epic_initializer_session(
     project_dir: Path,
     model: str,
@@ -195,7 +211,7 @@ async def run_epic_initializer_session(
     )
 
     async with client:
-        status, response = await run_agent_session(client, user_message, project_dir)
+        status, response = await run_agent_session_with_timeout(client, user_message, project_dir)
 
     if status == "error":
         print(f"Epic Initializer failed: {response}")
@@ -253,7 +269,8 @@ async def run_autonomous_agent(
     _lock_fd = acquire_harness_lock(project_dir)  # noqa: F841 — prevent GC releasing the lock
 
     # --- Dynamic Ecosystem Discovery ---
-    linear_api_key = os.environ.get("LINEAR_API_KEY", "")
+    from linear_config import get_linear_api_key
+    linear_api_key = get_linear_api_key()
     ecosystem = discover_user_ecosystem(project_dir, linear_api_key)
     print_discovery_summary(ecosystem)
 
@@ -323,13 +340,16 @@ async def run_autonomous_agent(
                 prompt = get_brownfield_initializer_prompt()
             else:
                 prompt = get_initializer_prompt()
-            is_first_run = False  # Only use initialiser once
         else:
             prompt = get_coding_prompt()
 
         # Run session with async context manager
         async with client:
-            status, response = await run_agent_session(client, prompt, project_dir)
+            status, response = await run_agent_session_with_timeout(client, prompt, project_dir)
+
+        # Only switch from initializer to coding prompt after a successful session
+        if is_first_run and status == "continue":
+            is_first_run = False
 
         # Check if project is complete via Linear API
         _state = load_linear_project_state(project_dir)

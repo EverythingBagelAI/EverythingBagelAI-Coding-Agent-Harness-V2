@@ -21,11 +21,9 @@ from pathlib import Path
 from agent import run_agent_session
 from client import create_client
 from discovery import discover_user_ecosystem, print_discovery_summary
+from config import DEFAULT_MODEL
 from security import configure_allowed_commands
 
-
-# Configuration
-DEFAULT_MODEL = "claude-opus-4-5-20251101"
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
@@ -91,7 +89,8 @@ def create_architect_client(
     Returns:
         Configured ClaudeSDKClient
     """
-    linear_api_key = os.environ.get("LINEAR_API_KEY", "")
+    from linear_config import get_linear_api_key
+    linear_api_key = get_linear_api_key()
 
     # Dynamic ecosystem discovery
     ecosystem = discover_user_ecosystem(project_dir, linear_api_key)

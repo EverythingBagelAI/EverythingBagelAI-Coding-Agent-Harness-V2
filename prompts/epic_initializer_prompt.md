@@ -17,6 +17,8 @@ Before creating a new Linear project, search for an existing project whose name 
 
 Create a single Linear project named: `[Project Name] — Epic N: [Epic Name]`
 
+Before creating any issues, call `mcp__linear__linear_list_teams` to get the available teams and their IDs. Use the first team's ID (or the most relevant team) as `teamId` in all subsequent issue creation calls.
+
 Create issues in this order:
 
 1. A **Setup issue** — environment validation, dependency installation, running the dev server, verifying baseline from previous epic works

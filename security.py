@@ -40,7 +40,7 @@ _DEFAULT_ALLOWED_COMMANDS: set[str] = {
 _allowed_commands: set[str] = set(_DEFAULT_ALLOWED_COMMANDS)
 
 # Commands that need additional validation even when in the allowlist
-COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh", "rm", "git"}
+COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh", "rm", "git", "mv", "cp", "sed", "awk", "export"}
 
 
 def configure_allowed_commands(commands: set[str]) -> None:
@@ -293,6 +293,16 @@ def validate_rm_command(command_string: str) -> tuple[bool, str]:
         if token.startswith("~"):
             return False, "rm with ~ paths is not permitted"
 
+    # Block dangerously short targets with recursive flag
+    import re
+    has_recursive = any(
+        "r" in t.lstrip("-") for t in tokens[1:] if t.startswith("-")
+    )
+    for token in tokens[1:]:
+        if not token.startswith("-"):
+            if has_recursive and token in (".", "*", "./"):
+                return False, f"rm -r on '{token}' is not permitted"
+
     return True, ""
 
 
@@ -312,13 +322,78 @@ def validate_git_command(command_string: str) -> tuple[bool, str]:
     if len(tokens) < 2:
         return True, ""  # bare `git` is fine
 
-    subcommand = tokens[1].lstrip("-")
-    if subcommand in BLOCKED_SUBCOMMANDS:
-        return False, f"git {subcommand} is not permitted — human review required"
+    # Scan all tokens for blocked subcommands — not just index 1
+    # This prevents bypass via `git -c key=val push`
+    for token in tokens[1:]:
+        if token.startswith("-"):
+            continue  # skip flags
+        if token in BLOCKED_SUBCOMMANDS:
+            return False, f"git {token} is not permitted — human review required"
 
-    # Block --force flag anywhere in the command
-    if "--force" in tokens or "-f" in tokens:
+    # Block --force anywhere in the command but NOT inside quoted commit messages
+    # Check only actual flag tokens (starting with -)
+    flag_tokens = [t for t in tokens[1:] if t.startswith("-")]
+    if "--force" in flag_tokens:
         return False, "git --force is not permitted"
+
+    # Block -f only as a standalone flag (not inside -m "message with -f")
+    # Find flags that are value-taking and exclude the next token from flag checks
+    force_check_tokens = []
+    skip_next = False
+    for token in tokens[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if token in ("-m", "--message", "--author", "--date"):
+            skip_next = True  # next token is a value, not a flag
+            continue
+        force_check_tokens.append(token)
+
+    if "-f" in force_check_tokens:
+        return False, "git -f is not permitted"
+
+    return True, ""
+
+
+def validate_file_command_paths(command_string: str) -> tuple[bool, str]:
+    """
+    Validate file operation commands — block absolute paths and traversal.
+    Used for mv, cp, sed, awk and similar commands.
+    """
+    try:
+        tokens = shlex.split(command_string)
+    except ValueError:
+        return False, "Could not parse command"
+
+    for token in tokens[1:]:
+        if token.startswith("-"):
+            continue
+        if token.startswith("/"):
+            return False, f"Absolute paths are not permitted: {token}"
+        if ".." in token:
+            return False, f"Path traversal (..) is not permitted: {token}"
+        if token.startswith("~"):
+            return False, f"Home directory paths are not permitted: {token}"
+
+    return True, ""
+
+
+def validate_export_command(command_string: str) -> tuple[bool, str]:
+    """Validate export — block overriding sensitive environment variables."""
+    PROTECTED_VARS = {
+        "LINEAR_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN",
+        "REF_API_KEY", "AWS_SECRET_ACCESS_KEY", "AWS_ACCESS_KEY_ID",
+        "DATABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
+    }
+    try:
+        tokens = shlex.split(command_string)
+    except ValueError:
+        return False, "Could not parse export command"
+
+    for token in tokens[1:]:
+        var_name = token.split("=")[0].upper()
+        if var_name in PROTECTED_VARS:
+            return False, f"export of protected variable '{var_name}' is not permitted"
 
     return True, ""
 
@@ -443,6 +518,14 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
                         return {"decision": "block", "reason": reason}
                 elif cmd == "git":
                     allowed, reason = validate_git_command(segment)
+                    if not allowed:
+                        return {"decision": "block", "reason": reason}
+                elif cmd in ("mv", "cp", "sed", "awk"):
+                    allowed, reason = validate_file_command_paths(segment)
+                    if not allowed:
+                        return {"decision": "block", "reason": reason}
+                elif cmd == "export":
+                    allowed, reason = validate_export_command(segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
 

@@ -113,6 +113,9 @@ def _fetch_ref_doc(query: str, api_key: str) -> tuple[str, str | None]:
     return query, None
 
 
+# TODO: Ref documentation results are not cached between sessions. On long
+# epic runs with many issues, this may cause rate limiting on the Ref API.
+# Future improvement: cache results to a local file keyed by library name.
 def prefetch_ref_docs(spec_text: str, ref_api_key: str | None = None) -> str:
     """
     Parse spec_text for library/framework names and fetch relevant documentation
@@ -282,10 +285,11 @@ def build_coding_agent_session_prompt(
     if current_issue is not None:
         issue_block = (
             "## CURRENT ISSUE (work on this and only this)\n\n"
+            f"ID: {current_issue['id']}\n"
             f"Title: {current_issue['title']}\n"
             f"Description: {current_issue.get('description', 'No description')}\n"
             f"Priority: {current_issue.get('priority', 'unset')}\n\n"
-            "Complete this issue, commit, mark it Done in Linear, then stop.\n"
+            "Complete this issue, commit, mark it Done in Linear using the ID above, then stop.\n"
             "Do not pick up additional issues in this session."
         )
         sections.append(issue_block)

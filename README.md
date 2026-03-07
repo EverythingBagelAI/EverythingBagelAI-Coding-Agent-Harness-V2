@@ -43,6 +43,8 @@ export LINEAR_API_KEY='lin_api_...'        # linear.app → Settings → API
 Optional:
 
 - `REF_API_KEY` — Used to pre-fetch library documentation for the coding agent. Get one at https://ref.tools. If absent, the harness runs without doc pre-fetching.
+  Without caching, Ref API calls are made fresh every session. On long epic runs this may hit rate limits.
+- `HARNESS_SESSION_TIMEOUT` — Maximum time in seconds for a single agent session (default: 1800 = 30 minutes). Increase for complex issues.
 
 MCP servers (add once via Claude Code CLI, auto-discovered by harness):
 
@@ -137,6 +139,8 @@ python autonomous_agent_demo.py --project-dir ./my-project --mode greenfield
 ```
 
 The agent reads `app_spec.txt` to understand what to build.
+
+> **Note:** In greenfield mode, relative `--project-dir` paths are placed inside a `generations/` subdirectory. For example, `--project-dir ./my-project` creates the project at `./generations/my-project`. Use an absolute path to bypass this behaviour.
 
 ### Brownfield Mode (V1, unchanged)
 

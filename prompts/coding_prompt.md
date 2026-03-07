@@ -15,10 +15,15 @@ You are a coding agent working on one issue at a time within an epic. You have a
    npm install -D @playwright/test 2>/dev/null || true
    npx playwright install chromium 2>/dev/null || true
    ```
-7. Run `init.sh` if it exists (`[ -f ./init.sh ] && ./init.sh`). Otherwise start the dev server with `npm run dev` or the appropriate start command for this project.
+7. Run `init.sh` if it exists (`[ -f ./init.sh ] && ./init.sh`). Otherwise start the dev server in the background:
+   ```bash
+   npm run dev > /tmp/dev-server.log 2>&1 &
+   sleep 3 && curl -s http://localhost:3000 > /dev/null || sleep 5
+   echo "Dev server PID: $!"
+   ```
 8. Install backend test dependencies (safe to run even if already installed):
    `pip install pytest httpx pytest-asyncio 2>/dev/null || true`
-9. Run the baseline Playwright test (see Testing section) to confirm the app is working before you touch anything
+9. Run baseline Playwright tests if any test files exist (`ls e2e/ 2>/dev/null || ls tests/ 2>/dev/null`). Skip this step if no test files are found.
 
 If the app is broken when you start, fix the breakage before implementing anything new. Commit the fix separately.
 

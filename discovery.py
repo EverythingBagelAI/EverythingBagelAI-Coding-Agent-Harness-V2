@@ -665,8 +665,9 @@ def discover_user_ecosystem(
         global_servers, project_servers, harness_servers, warnings
     )
 
-    # Apply session-scoped MCP filtering
-    merged_mcps = _filter_mcps_by_session(merged_mcps, session_type)
+    # Note: MCP session-scoped filtering is applied in create_client(), not here.
+    # discover_user_ecosystem() returns the full merged set so callers can
+    # inspect all available MCPs before filtering by session type.
 
     # 2. Load plugins and skills
     plugins = load_installed_plugins()

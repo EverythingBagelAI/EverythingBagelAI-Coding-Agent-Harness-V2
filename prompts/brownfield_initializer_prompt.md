@@ -207,8 +207,8 @@ Create a file called `.linear_project.json` with the following information:
 
 If you have time remaining, begin implementing the highest-priority features:
 
-- Use `mcp__linear__list_issues` to find Todo issues with priority 1
-- Use `mcp__linear__update_issue` to set status to "In Progress"
+- Use `mcp__linear__linear_search_issues` to find Todo issues with priority 1
+- Use `mcp__linear__linear_update_issue` to set status to "In Progress"
 - Work on ONE feature at a time
 - **Read existing code patterns before writing new code**
 - Test thoroughly before marking status as "Done"

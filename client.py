@@ -58,12 +58,8 @@ def create_client(
        (see security.py, configured from discovery.py)
     4. Disallowed tools — Conflicting frameworks blocked at SDK level
     """
-    linear_api_key = os.environ.get("LINEAR_API_KEY")
-    if not linear_api_key:
-        raise ValueError(
-            "LINEAR_API_KEY environment variable not set.\n"
-            "Get your API key from: https://linear.app/YOUR-TEAM/settings/api"
-        )
+    from linear_config import get_linear_api_key
+    linear_api_key = get_linear_api_key()
 
     # Run discovery if not pre-computed
     if ecosystem is None:

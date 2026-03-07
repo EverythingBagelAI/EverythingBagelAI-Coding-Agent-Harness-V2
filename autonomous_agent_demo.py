@@ -29,12 +29,7 @@ import os
 from pathlib import Path
 
 from agent import run_autonomous_agent
-
-
-# Configuration
-# Using Claude Opus 4.5 as default for best coding and agentic performance
-# See: https://www.anthropic.com/news/claude-opus-4-5
-DEFAULT_MODEL = "claude-opus-4-5-20251101"
+from config import DEFAULT_MODEL
 
 
 def parse_args() -> argparse.Namespace:

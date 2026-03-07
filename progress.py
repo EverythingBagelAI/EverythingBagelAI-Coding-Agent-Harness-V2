@@ -7,7 +7,6 @@ Progress is tracked via Linear issues, with local state cached in .linear_projec
 Epic state is persisted in claude-progress.txt alongside existing session state.
 """
 
-import fcntl
 import json
 import logging
 import os
@@ -24,6 +23,15 @@ def acquire_harness_lock(project_dir: Path) -> object:
     Prevents concurrent harness runs from corrupting state.
     Returns the lock file descriptor (keep a reference to prevent GC).
     """
+    try:
+        import fcntl
+    except ImportError:
+        logger.warning(
+            "File locking unavailable (Windows). "
+            "Do not run multiple harness instances simultaneously."
+        )
+        return -1  # sentinel value meaning "no lock held"
+
     lock_path = project_dir / ".harness.lock"
     fd = open(lock_path, "w")
     try:

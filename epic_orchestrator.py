@@ -8,12 +8,16 @@ the agent is responsible for reasoning and implementation only.
 """
 
 import asyncio
+import logging
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import Optional
 
-from agent import run_agent_session, run_epic_initializer_session, AUTO_CONTINUE_DELAY_SECONDS
+logger = logging.getLogger(__name__)
+
+from agent import run_agent_session, run_agent_session_with_timeout, run_epic_initializer_session, AUTO_CONTINUE_DELAY_SECONDS
 from client import create_client
 from discovery import discover_user_ecosystem, print_discovery_summary
 from linear_client import (
@@ -39,6 +43,22 @@ from prompts import get_coding_prompt, build_coding_agent_session_prompt
 from security import configure_allowed_commands
 
 MAX_ISSUE_RETRIES = 3
+
+
+def _linear_call_with_retry(fn, *args, max_attempts=3, **kwargs):
+    """Call a linear_client function with retry on transient errors."""
+    for attempt in range(max_attempts):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            if attempt == max_attempts - 1:
+                raise
+            wait = 2 ** attempt
+            logger.warning(
+                "Linear API call failed (attempt %d/%d): %s. Retrying in %ds...",
+                attempt + 1, max_attempts, e, wait,
+            )
+            time.sleep(wait)
 
 
 async def _run_coding_loop(
@@ -71,11 +91,11 @@ async def _run_coding_loop(
             return (0, True)
 
         # Fetch the current issue from Linear
-        current_issue = get_current_issue(project_id)
+        current_issue = _linear_call_with_retry(get_current_issue, project_id)
 
         if current_issue is None:
             # All regular issues done — check for human gate
-            gate_issue = get_human_gate_issue(project_id)
+            gate_issue = _linear_call_with_retry(get_human_gate_issue, project_id)
             if gate_issue and gate_issue["state"]["type"] != "completed":
                 gate_id = gate_issue["id"]
                 set_human_gate(project_dir, gate_id)
@@ -85,9 +105,9 @@ async def _run_coding_loop(
                 return (0, True)
 
             # No more eligible issues — check if all complete
-            if get_all_issues_complete(project_id):
+            if _linear_call_with_retry(get_all_issues_complete, project_id):
                 # Run snapshot session before marking epic complete
-                snapshot_issue = get_snapshot_issue(project_id)
+                snapshot_issue = _linear_call_with_retry(get_snapshot_issue, project_id)
                 if snapshot_issue and snapshot_issue["state"]["type"] != "completed":
                     print(f"\n  Running Snapshot session for Epic {epic_number}...")
                     snapshot_prompt = build_coding_agent_session_prompt(
@@ -98,7 +118,12 @@ async def _run_coding_loop(
                         session_type="coding",
                     )
                     async with snapshot_client:
-                        await run_agent_session(snapshot_client, snapshot_prompt, project_dir)
+                        snap_status, snap_response = await run_agent_session_with_timeout(snapshot_client, snapshot_prompt, project_dir)
+                    if snap_status == "error":
+                        print(
+                            f"\n  Warning: Snapshot session for epic {epic_number} failed. "
+                            "shared_context.md may be stale. Check logs and re-run if needed."
+                        )
 
                 epic_issues_resolved = iteration - 1  # approximate
                 return (epic_issues_resolved, False)
@@ -140,7 +165,7 @@ async def _run_coding_loop(
         )
 
         async with client:
-            status, response = await run_agent_session(client, prompt, project_dir)
+            status, response = await run_agent_session_with_timeout(client, prompt, project_dir)
 
         if status == "error":
             print("\nSession encountered an error. Will retry...")
@@ -183,13 +208,16 @@ async def run_epic_mode(
     # Copy skill files into project so agent can access them from project CWD
     skills_src = Path(__file__).parent / ".claude" / "skills"
     skills_dst = project_dir / ".claude" / "skills"
-    if skills_src.exists() and not skills_dst.exists():
+    if skills_src.exists():
+        if skills_dst.exists():
+            shutil.rmtree(skills_dst)
         shutil.copytree(skills_src, skills_dst)
-        # Copies all skills (e2e-test, api-test, etc.) into the project
+        # Copies all skills (e2e-test, api-test, etc.) into the project, overwriting stale versions
         print(f"  Copied skill files to {skills_dst}")
 
     # --- Dynamic Ecosystem Discovery ---
-    linear_api_key = os.environ.get("LINEAR_API_KEY", "")
+    from linear_config import get_linear_api_key
+    linear_api_key = get_linear_api_key()
     ecosystem = discover_user_ecosystem(project_dir, linear_api_key)
     print_discovery_summary(ecosystem)
     configure_allowed_commands(ecosystem.merged_allowed_commands)
@@ -208,7 +236,7 @@ async def run_epic_mode(
     gate_id = get_human_gate_issue_id(project_dir)
     if gate_id:
         try:
-            if not is_human_gate_resolved(gate_id):
+            if not _linear_call_with_retry(is_human_gate_resolved, gate_id):
                 _print_human_gate_pause(gate_id, project_dir)
                 return
             else:
