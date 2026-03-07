@@ -189,7 +189,8 @@ async def generate_epics(spec_path: Path, model: str, project_dir: Path) -> None
     # Create the architect client
     client = create_architect_client(model, architect_prompt, project_dir)
 
-    # Ensure epics/ directory exists
+    # Ensure project and epics directories exist
+    project_dir.mkdir(parents=True, exist_ok=True)
     epics_dir = project_dir / "epics"
     epics_dir.mkdir(parents=True, exist_ok=True)
 

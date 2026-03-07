@@ -56,7 +56,8 @@ Examples:
   # Brownfield - work on existing codebase
   python autonomous_agent_demo.py --mode brownfield --existing-dir /path/to/repo
 
-  # Epic - multi-epic orchestration
+  # Epic - multi-epic orchestration (run generate_epics.py first)
+  python generate_epics.py --project-dir ./my-project
   python autonomous_agent_demo.py --project-dir ./my-project --mode epic
 
   # Continue existing project

@@ -215,6 +215,10 @@ def _read_epic_state(project_dir: Path) -> dict:
     }
 
     pf = _progress_file(project_dir)
+    # Clean up stale temp file from a previous crash
+    stale_tmp = pf.with_suffix(".tmp")
+    if stale_tmp.exists():
+        stale_tmp.unlink()
     if not pf.exists():
         return defaults
 
@@ -382,17 +386,17 @@ def load_epic_index(project_dir: Path) -> list[dict]:
         with open(index_path) as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        raise ValueError(f"spec_index.json is malformed: {e}") from e
+        raise ValueError(f"spec_index.json is malformed: {e} — re-run generate_epics.py to regenerate") from e
 
     if not isinstance(data, list):
-        raise ValueError(f"spec_index.json must be a JSON array, got {type(data)}")
+        raise ValueError(f"spec_index.json must be a JSON array, got {type(data)} — re-run generate_epics.py to regenerate")
 
     required_keys = {"number", "name", "spec_file"}
     for i, item in enumerate(data):
         missing = required_keys - set(item.keys())
         if missing:
             raise ValueError(
-                f"spec_index.json entry {i} is missing required keys: {missing}"
+                f"spec_index.json entry {i} is missing required keys: {missing} — re-run generate_epics.py to regenerate"
             )
     return data
 

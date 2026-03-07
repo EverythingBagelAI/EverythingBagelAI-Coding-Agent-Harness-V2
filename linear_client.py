@@ -52,7 +52,7 @@ def _query(query: str, variables: dict | None = None) -> dict:
             raise RuntimeError(f"Linear API error: {data['errors']}")
         return data["data"]
     last_response.raise_for_status()
-    return {}
+    raise RuntimeError("Linear API retries exhausted")  # unreachable after raise_for_status
 
 
 def get_current_issue(project_id: str) -> Optional[dict]:
