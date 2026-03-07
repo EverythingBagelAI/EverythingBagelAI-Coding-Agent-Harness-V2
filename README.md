@@ -186,12 +186,14 @@ After running `generate_epics.py`, **review the epics before running the harness
             └── SKILL.md          # Playwright testing skill (plan → write → heal)
 ```
 
-**Generated per project** (lives alongside your application code, git-committed):
+**Generated per project** (lives alongside your application code):
+
+> **Do not commit** `.linear_project.json` or `claude-progress.txt` — these are transient harness state files. Add them to your project's `.gitignore`.
 
 ```
 my-project/
-├── .linear_project.json      # Current epic's Linear project ID
-├── claude-progress.txt       # Session + epic state (edit to reset if needed)
+├── .linear_project.json      # Current epic's Linear project ID (do not commit)
+├── claude-progress.txt       # Session + epic state (do not commit — edit to reset if needed)
 ├── shared_context.md         # Cross-epic design system, data model, API contracts
 ├── build_deviations.md       # Agent decisions that diverged from the spec
 ├── epics/

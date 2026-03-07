@@ -170,7 +170,7 @@ async def run_epic_mode(
     project_dir.mkdir(parents=True, exist_ok=True)
 
     # Acquire harness lock — prevents two instances from running on the same project
-    acquire_harness_lock(project_dir)
+    _lock_fd = acquire_harness_lock(project_dir)  # noqa: F841 — prevent GC releasing the lock
 
     # Copy skill files into project so agent can access them from project CWD
     skills_src = Path(__file__).parent / ".claude" / "skills"

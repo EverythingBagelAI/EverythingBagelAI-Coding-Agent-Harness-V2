@@ -103,7 +103,7 @@ def get_current_issue(project_id: str) -> Optional[dict]:
     issues = project.get("issues", {}).get("nodes", [])
     for issue in issues:
         title = issue["title"]
-        if title.startswith("[HUMAN GATE]") or title.startswith("[SNAPSHOT]"):
+        if title.upper().startswith("[HUMAN GATE]") or title.upper().startswith("[SNAPSHOT]"):
             continue
         return issue
     return None
@@ -210,7 +210,7 @@ def get_all_issues_complete(project_id: str) -> bool:
     issues = project.get("issues", {}).get("nodes", [])
     for issue in issues:
         title = issue["title"]
-        if title.startswith("[HUMAN GATE]") or title.startswith("[SNAPSHOT]"):
+        if title.upper().startswith("[HUMAN GATE]") or title.upper().startswith("[SNAPSHOT]"):
             continue
         if issue["state"]["type"] not in ("completed", "cancelled"):
             return False

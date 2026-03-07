@@ -21,6 +21,7 @@ from pathlib import Path
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, HookMatcher
 
 from agent import run_agent_session
+from client import BUILTIN_TOOLS
 from discovery import discover_user_ecosystem, print_discovery_summary
 from security import bash_security_hook, configure_allowed_commands
 
@@ -103,14 +104,7 @@ def create_architect_client(
     configure_allowed_commands(ecosystem.merged_allowed_commands)
 
     # Built-in tools always available
-    allowed_tools: list[str] = [
-        "Read",
-        "Write",
-        "Edit",
-        "Glob",
-        "Grep",
-        "Bash",
-    ]
+    allowed_tools: list[str] = list(BUILTIN_TOOLS)
 
     # Add wildcard per MCP server
     for server_name in ecosystem.merged_mcp_servers:
