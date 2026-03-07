@@ -24,6 +24,7 @@ from linear_client import (
     get_snapshot_issue,
 )
 from progress import (
+    acquire_harness_lock,
     load_epic_index,
     get_epic_by_number,
     get_next_pending_epic,
@@ -66,6 +67,9 @@ async def run_epic_mode(
 
     # Create project directory
     project_dir.mkdir(parents=True, exist_ok=True)
+
+    # Acquire harness lock — prevents two instances from running on the same project
+    acquire_harness_lock(project_dir)
 
     # Copy skill files into project so agent can access them from project CWD
     skills_src = Path(__file__).parent / ".claude" / "skills"

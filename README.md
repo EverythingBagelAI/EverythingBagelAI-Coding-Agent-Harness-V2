@@ -73,7 +73,7 @@ cp templates/master_app_spec_template.md prompts/master_app_spec.md
 # edit prompts/master_app_spec.md
 
 # 4. Generate epic sub-specs
-python generate_epics.py
+python generate_epics.py --project-dir ./my-project
 # Produces epics/ directory and shared_context.md
 # Review and edit before running — this is your cheapest quality gate
 

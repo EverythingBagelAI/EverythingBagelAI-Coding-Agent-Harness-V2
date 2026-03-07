@@ -392,7 +392,9 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
                 "reason": f"Command '{cmd}' is not in the allowed commands list",
             }
 
-    # Additional validation for sensitive commands — check ALL pipe segments
+    # Additional validation for sensitive commands — check ALL pipe segments.
+    # This covers pipe-bypass attacks like `cat foo | pkill bash` where the
+    # dangerous command is not the first segment (S13 fix).
     pipe_segments = [s.strip() for s in command.split("|")]
     for segment in pipe_segments:
         segment_cmds = extract_commands(segment)
