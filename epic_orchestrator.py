@@ -9,6 +9,7 @@ the agent is responsible for reasoning and implementation only.
 
 import asyncio
 import os
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -20,6 +21,7 @@ from linear_client import (
     get_human_gate_issue,
     is_human_gate_resolved,
     get_all_issues_complete,
+    get_snapshot_issue,
 )
 from progress import (
     load_epic_index,
@@ -64,6 +66,13 @@ async def run_epic_mode(
 
     # Create project directory
     project_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy skill files into project so agent can access them from project CWD
+    skills_src = Path(__file__).parent / ".claude" / "skills"
+    skills_dst = project_dir / ".claude" / "skills"
+    if skills_src.exists() and not skills_dst.exists():
+        shutil.copytree(skills_src, skills_dst)
+        print(f"  Copied skill files to {skills_dst}")
 
     # --- Dynamic Ecosystem Discovery ---
     linear_api_key = os.environ.get("LINEAR_API_KEY", "")
@@ -130,6 +139,8 @@ async def run_epic_mode(
         iteration = 0
         epic_issues_resolved = 0
         base_prompt = get_coding_prompt()
+        issue_retry_counts: dict[str, int] = {}
+        MAX_ISSUE_RETRIES = 3
 
         while True:
             iteration += 1
@@ -139,21 +150,36 @@ async def run_epic_mode(
                 print("Re-run to continue.")
                 return
 
-            # Check for human gate in Linear
-            gate_issue = get_human_gate_issue(project_id)
-            if gate_issue and gate_issue["state"]["type"] != "completed":
-                set_human_gate(project_dir, gate_issue["id"])
-                _print_human_gate_pause_detail(
-                    epic_number, gate_issue.get("description", ""), project_dir
-                )
-                return
-
             # Fetch the current issue from Linear
             current_issue = get_current_issue(project_id)
 
             if current_issue is None:
+                # All regular issues done — check for human gate
+                gate_issue = get_human_gate_issue(project_id)
+                if gate_issue and gate_issue["state"]["type"] != "completed":
+                    gate_id = gate_issue["id"]
+                    set_human_gate(project_dir, gate_id)
+                    _print_human_gate_pause_detail(
+                        epic_number, gate_issue.get("description", ""), project_dir
+                    )
+                    return
+
                 # No more eligible issues — check if all complete
                 if get_all_issues_complete(project_id):
+                    # Run snapshot session before marking epic complete
+                    snapshot_issue = get_snapshot_issue(project_id)
+                    if snapshot_issue and snapshot_issue["state"]["type"] != "completed":
+                        print(f"\n  Running Snapshot session for Epic {epic_number}...")
+                        snapshot_prompt = build_coding_agent_session_prompt(
+                            project_dir, snapshot_issue, base_prompt
+                        )
+                        snapshot_client = create_client(
+                            project_dir, model, mode="greenfield", ecosystem=ecosystem,
+                            session_type="coding",
+                        )
+                        async with snapshot_client:
+                            await run_agent_session(snapshot_client, snapshot_prompt, project_dir)
+
                     epic_issues_resolved = iteration - 1  # approximate
                     total_issues_resolved += epic_issues_resolved
                     mark_epic_complete(project_dir, epic_number)
@@ -170,6 +196,15 @@ async def run_epic_mode(
                     print("  No eligible issues found but epic not complete. Retrying...")
                     await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
                     continue
+
+            issue_id = current_issue["id"]
+            issue_retry_counts[issue_id] = issue_retry_counts.get(issue_id, 0) + 1
+
+            if issue_retry_counts[issue_id] > MAX_ISSUE_RETRIES:
+                print(f"\n  ❌ Issue '{current_issue['title']}' has failed {MAX_ISSUE_RETRIES} times.")
+                print(f"  Fix the issue in Linear or re-run to retry from scratch.")
+                print(f"  Stopping harness to prevent infinite loop.\n")
+                return
 
             # Build the prompt with injected context
             prompt = build_coding_agent_session_prompt(

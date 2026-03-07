@@ -5,6 +5,7 @@ The agent continues to use the Linear MCP for issue management.
 """
 
 import os
+import time
 from typing import Optional
 
 import httpx
@@ -19,18 +20,36 @@ def _headers() -> dict:
     return {"Authorization": api_key, "Content-Type": "application/json"}
 
 
+MAX_RETRIES = 3
+
+
 def _query(query: str, variables: dict | None = None) -> dict:
-    response = httpx.post(
-        LINEAR_API_URL,
-        json={"query": query, "variables": variables or {}},
-        headers=_headers(),
-        timeout=30,
-    )
-    response.raise_for_status()
-    data = response.json()
-    if "errors" in data:
-        raise RuntimeError(f"Linear API error: {data['errors']}")
-    return data["data"]
+    headers = _headers()
+    last_response = None
+    for attempt in range(MAX_RETRIES):
+        response = httpx.post(
+            LINEAR_API_URL,
+            json={"query": query, "variables": variables or {}},
+            headers=headers,
+            timeout=30,
+        )
+        last_response = response
+        if response.status_code == 429:
+            retry_after = int(response.headers.get("retry-after", str(2 ** attempt)))
+            print(f"  Linear rate limited. Retrying in {retry_after}s...")
+            time.sleep(retry_after)
+            continue
+        if response.status_code >= 500 and attempt < MAX_RETRIES - 1:
+            print(f"  Linear server error ({response.status_code}). Retrying in {2 ** attempt}s...")
+            time.sleep(2 ** attempt)
+            continue
+        response.raise_for_status()
+        data = response.json()
+        if "errors" in data:
+            raise RuntimeError(f"Linear API error: {data['errors']}")
+        return data["data"]
+    last_response.raise_for_status()
+    return {}
 
 
 def get_current_issue(project_id: str) -> Optional[dict]:
@@ -110,6 +129,33 @@ def is_human_gate_resolved(issue_id: str) -> bool:
     """
     data = _query(query, {"id": issue_id})
     return data["issue"]["state"]["type"] == "completed"
+
+
+def get_snapshot_issue(project_id: str) -> Optional[dict]:
+    """Get the [SNAPSHOT] issue for a project."""
+    query = """
+    query GetProjectIssues($projectId: String!) {
+        project(id: $projectId) {
+            issues {
+                nodes {
+                    id
+                    title
+                    description
+                    state { type name }
+                }
+            }
+        }
+    }
+    """
+    data = _query(query, {"projectId": project_id})
+    project = data.get("project")
+    if not project:
+        return None
+    issues = project.get("issues", {}).get("nodes", [])
+    for issue in issues:
+        if "[SNAPSHOT]" in issue.get("title", "").upper():
+            return issue
+    return None
 
 
 def get_all_issues_complete(project_id: str) -> bool:

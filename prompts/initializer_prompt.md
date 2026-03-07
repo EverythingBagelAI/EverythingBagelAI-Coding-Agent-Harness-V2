@@ -37,10 +37,12 @@ Based on `app_spec.txt`, create Linear issues for each feature using the
 
 You should create enough issues to comprehensively cover all features while ensuring
 each issue represents a focused, testable piece of functionality. Avoid both:
+
 - Issues that are too large (covering too many unrelated features)
 - Issues that are too granular (single function or trivial changes)
 
 Typical projects range from 50-300 issues depending on complexity:
+
 - Small/simple apps: 50-100 issues
 - Medium complexity apps: 100-200 issues
 - Large/complex apps: 200-300+ issues
@@ -58,14 +60,18 @@ priority: 1-4 based on importance (1=urgent/foundational, 4=low/polish)
 ```
 
 **Issue Description Template:**
+
 ```markdown
 ## Feature Description
+
 [Brief description of what this feature does and why it matters]
 
 ## Category
+
 [functional OR style]
 
 ## Test Steps
+
 1. Navigate to [page/location]
 2. [Specific action to perform]
 3. [Another action]
@@ -73,12 +79,14 @@ priority: 1-4 based on importance (1=urgent/foundational, 4=low/polish)
 5. [Additional verification steps as needed]
 
 ## Acceptance Criteria
+
 - [ ] [Specific criterion 1]
 - [ ] [Specific criterion 2]
 - [ ] [Specific criterion 3]
 ```
 
 **Requirements for Linear Issues:**
+
 - Create enough issues to comprehensively cover all features in the spec
 - Mix of functional and style features (note category in description)
 - Order by priority: foundational features get priority 1-2, polish features get 3-4
@@ -86,6 +94,7 @@ priority: 1-4 based on importance (1=urgent/foundational, 4=low/polish)
 - All issues start in "Todo" status (default)
 
 **Priority Guidelines:**
+
 - Priority 1 (Urgent): Core infrastructure, database, basic UI layout
 - Priority 2 (High): Primary user-facing features, authentication
 - Priority 3 (Medium): Secondary features, enhancements
@@ -102,13 +111,16 @@ Create a special issue titled "[META] Project Progress Tracker" with:
 
 ```markdown
 ## Project Overview
+
 [Copy the project name and brief overview from app_spec.txt]
 
 ## Session Tracking
+
 This issue is used for session handoff between coding agents.
 Each agent should add a comment summarizing their session.
 
 ## Key Milestones
+
 - [ ] Project setup complete
 - [ ] Core infrastructure working
 - [ ] Primary features implemented
@@ -116,10 +128,12 @@ Each agent should add a comment summarizing their session.
 - [ ] Polish and refinement done
 
 ## Notes
+
 [Any important context about the project]
 ```
 
 This META issue will be used by all future agents to:
+
 - Read context from previous sessions (via comments)
 - Write session summaries before ending
 - Track overall project milestones
@@ -138,6 +152,7 @@ Base the script on the technology stack specified in `app_spec.txt`.
 ### NEXT TASK: Initialize Git
 
 Create a git repository and make your first commit with:
+
 - init.sh (environment setup script)
 - README.md (project overview and setup instructions)
 - Any initial project structure files
@@ -153,6 +168,7 @@ components mentioned in the spec.
 ### NEXT TASK: Save Linear Project State
 
 Create a file called `.linear_project.json` with the following information:
+
 ```json
 {
   "initialized": true,
@@ -172,6 +188,7 @@ This file tells future sessions that Linear has been set up.
 
 If you have time remaining in this session, you may begin implementing
 the highest-priority features. Remember:
+
 - Use `mcp__linear__linear_search_issues` to find Todo issues with priority 1
 - Use `mcp__linear__linear_update_issue` to set status to "In Progress"
 - Work on ONE feature at a time
@@ -182,12 +199,15 @@ the highest-priority features. Remember:
 ### ENDING THIS SESSION
 
 Before your context fills up:
+
 1. Commit all work with descriptive messages
 2. Add a comment to the META issue summarizing what you accomplished:
+
    ```markdown
    ## Session 1 Complete - Initialization
 
    ### Accomplished
+
    - Created 50 Linear issues from app_spec.txt
    - Set up project structure
    - Created init.sh
@@ -195,15 +215,18 @@ Before your context fills up:
    - [Any features started/completed]
 
    ### Linear Status
+
    - Total issues: 50
    - Done: X
    - In Progress: Y
    - Todo: Z
 
    ### Notes for Next Session
+
    - [Any important context]
    - [Recommendations for what to work on next]
    ```
+
 3. Ensure `.linear_project.json` exists
 4. Leave the environment in a clean, working state
 

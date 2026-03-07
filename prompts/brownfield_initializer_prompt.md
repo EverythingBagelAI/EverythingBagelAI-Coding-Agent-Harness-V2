@@ -32,6 +32,7 @@ find . -path "*/test*" -o -path "*/__tests__*" -o -path "*.test.*" -o -path "*.s
 ```
 
 **Key things to note:**
+
 - Technology stack (framework, language, styling, database)
 - File structure and naming conventions
 - Commit message conventions
@@ -100,25 +101,31 @@ priority: 1-4 based on importance
 ```
 
 **Issue Description Template (Brownfield):**
+
 ```markdown
 ## Feature Description
+
 [Brief description of what this adds/changes and why]
 
 ## Category
+
 [new-feature | enhancement | bug-fix | refactor | test | docs]
 
 ## Existing Context
+
 - **Related files:** [List files that already exist and will be modified]
 - **Existing patterns:** [Note any patterns to follow from the codebase]
 - **Dependencies:** [Any existing features this builds on]
 
 ## Test Steps
+
 1. Navigate to [page/location]
 2. [Specific action to perform]
 3. [Another action]
 4. Verify [expected result]
 
 ## Acceptance Criteria
+
 - [ ] [Specific criterion 1]
 - [ ] [Specific criterion 2]
 - [ ] Follows existing code patterns and conventions
@@ -126,6 +133,7 @@ priority: 1-4 based on importance
 ```
 
 **Priority Guidelines:**
+
 - Priority 1 (Urgent): Core infrastructure changes, blocking dependencies
 - Priority 2 (High): Primary new features, important enhancements
 - Priority 3 (Medium): Secondary features, refactoring
@@ -141,18 +149,22 @@ Create a special issue titled "[META] Project Progress Tracker" with:
 
 ```markdown
 ## Project Overview
+
 [Project name from app_spec.txt] - Brownfield Development
 
 ### Existing Codebase Summary
+
 - **Stack:** [Technology stack discovered]
 - **Structure:** [Brief structure summary]
 - **Conventions:** [Key conventions to follow]
 
 ## Session Tracking
+
 This issue is used for session handoff between coding agents.
 Each agent should add a comment summarising their session.
 
 ## Key Milestones
+
 - [ ] Codebase analysis complete
 - [ ] Linear issues created
 - [ ] Core changes implemented
@@ -160,6 +172,7 @@ Each agent should add a comment summarising their session.
 - [ ] Testing and polish done
 
 ## Notes
+
 - This is brownfield development on an existing codebase
 - All changes must respect existing patterns and conventions
 - [Any important context about the codebase]
@@ -168,6 +181,7 @@ Each agent should add a comment summarising their session.
 ### NEXT TASK: Save Linear Project State
 
 Create a file called `.linear_project.json` with the following information:
+
 ```json
 {
   "initialized": true,
@@ -183,6 +197,7 @@ Create a file called `.linear_project.json` with the following information:
 ```
 
 **DO NOT:**
+
 - Create init.sh (the project already has its own setup)
 - Initialise git (git already exists)
 - Create a new project structure (one already exists)
@@ -191,6 +206,7 @@ Create a file called `.linear_project.json` with the following information:
 ### OPTIONAL: Start Implementation
 
 If you have time remaining, begin implementing the highest-priority features:
+
 - Use `mcp__linear__list_issues` to find Todo issues with priority 1
 - Use `mcp__linear__update_issue` to set status to "In Progress"
 - Work on ONE feature at a time
@@ -202,31 +218,38 @@ If you have time remaining, begin implementing the highest-priority features:
 ### ENDING THIS SESSION
 
 Before your context fills up:
+
 1. Commit all work with descriptive messages following existing conventions
 2. Add a comment to the META issue summarising what you accomplished:
+
    ```markdown
    ## Session 1 Complete - Brownfield Initialisation
 
    ### Codebase Analysis
+
    - Stack: [discovered stack]
    - Key patterns: [patterns to follow]
    - Conventions: [commit style, naming, etc.]
 
    ### Accomplished
+
    - Analysed existing codebase
    - Created [N] Linear issues from app_spec.txt
    - [Any features started/completed]
 
    ### Linear Status
+
    - Total issues: [N]
    - Done: X
    - In Progress: Y
    - Todo: Z
 
    ### Notes for Next Session
+
    - [Important context about the codebase]
    - [Recommendations for what to work on next]
    ```
+
 3. Ensure `.linear_project.json` exists
 4. Leave the codebase in a clean, working state
 

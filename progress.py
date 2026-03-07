@@ -8,11 +8,14 @@ Epic state is persisted in claude-progress.txt alongside existing session state.
 """
 
 import json
+import logging
 import os
 import subprocess
 from pathlib import Path
 
 from linear_config import LINEAR_PROJECT_MARKER
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +224,14 @@ def _read_epic_state(project_dir: Path) -> dict:
         elif key == "linear_project_id":
             state["linear_project_id"] = value if value != "null" else None
         elif key == "epic_status":
-            state["epic_status"] = json.loads(value) if value != "{}" else {}
+            try:
+                state["epic_status"] = json.loads(value) if value != "{}" else {}
+            except json.JSONDecodeError:
+                logger.warning(
+                    "Corrupt epic_status in claude-progress.txt — resetting to empty. "
+                    "Re-run will restart from the current epic."
+                )
+                state["epic_status"] = {}
         elif key == "human_gate_issue_id":
             state["human_gate_issue_id"] = value if value != "null" else None
 

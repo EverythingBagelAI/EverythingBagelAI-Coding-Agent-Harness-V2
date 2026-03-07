@@ -7,9 +7,9 @@ Standalone script that reads a master app spec and uses an Architect Agent
 to decompose it into epic sub-specs in the epics/ directory.
 
 Usage:
-    python generate_epics.py
-    python generate_epics.py --spec path/to/custom_spec.md
-    python generate_epics.py --model claude-opus-4-5-20251101
+    python generate_epics.py --project-dir ./my-project
+    python generate_epics.py --project-dir ./my-project --spec path/to/custom_spec.md
+    python generate_epics.py --project-dir ./my-project --model claude-opus-4-5-20251101
 """
 
 import argparse
@@ -28,7 +28,6 @@ from security import bash_security_hook, configure_allowed_commands
 # Configuration
 DEFAULT_MODEL = "claude-opus-4-5-20251101"
 PROMPTS_DIR = Path(__file__).parent / "prompts"
-REPO_ROOT = Path(__file__).parent
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,13 +38,13 @@ def parse_args() -> argparse.Namespace:
         epilog="""
 Examples:
   # Use default spec (prompts/master_app_spec.md)
-  python generate_epics.py
+  python generate_epics.py --project-dir ./my-project
 
   # Use a custom spec file
-  python generate_epics.py --spec path/to/custom_spec.md
+  python generate_epics.py --project-dir ./my-project --spec path/to/custom_spec.md
 
   # Use a specific model
-  python generate_epics.py --model claude-sonnet-4-5-20250929
+  python generate_epics.py --project-dir ./my-project --model claude-sonnet-4-5-20250929
 
 Environment Variables:
   CLAUDE_CODE_OAUTH_TOKEN    Claude Code OAuth token (required)
@@ -61,6 +60,11 @@ Environment Variables:
     )
 
     parser.add_argument(
+        "--project-dir", type=Path, required=True,
+        help="Target project directory for generated epics",
+    )
+
+    parser.add_argument(
         "--model",
         type=str,
         default=DEFAULT_MODEL,
@@ -73,6 +77,7 @@ Environment Variables:
 def create_architect_client(
     model: str,
     system_prompt: str,
+    project_dir: Path,
 ) -> ClaudeSDKClient:
     """
     Create a Claude Agent SDK client configured for the Architect Agent.
@@ -83,6 +88,7 @@ def create_architect_client(
     Args:
         model: Claude model to use
         system_prompt: The architect prompt content
+        project_dir: Target project directory (used as agent CWD)
 
     Returns:
         Configured ClaudeSDKClient
@@ -90,7 +96,7 @@ def create_architect_client(
     linear_api_key = os.environ.get("LINEAR_API_KEY", "")
 
     # Dynamic ecosystem discovery
-    ecosystem = discover_user_ecosystem(REPO_ROOT, linear_api_key)
+    ecosystem = discover_user_ecosystem(project_dir, linear_api_key)
     print_discovery_summary(ecosystem)
 
     # Configure security with discovered commands
@@ -134,25 +140,27 @@ def create_architect_client(
                 ],
             },
             max_turns=1000,
-            cwd=str(REPO_ROOT.resolve()),
+            cwd=str(project_dir.resolve()),
         )
     )
 
 
-async def generate_epics(spec_path: Path, model: str) -> None:
+async def generate_epics(spec_path: Path, model: str, project_dir: Path) -> None:
     """
     Run the Architect Agent to decompose a master spec into epics.
 
     Args:
         spec_path: Path to the master app spec
         model: Claude model to use
+        project_dir: Target project directory for generated output
     """
     print("\n" + "=" * 70)
     print("  EVERYTHINGBAGELAI EPIC GENERATOR")
     print("=" * 70)
     print(f"\nSpec file: {spec_path}")
     print(f"Model: {model}")
-    print(f"Output: epics/")
+    print(f"Project dir: {project_dir.resolve()}")
+    print(f"Output: {project_dir / 'epics'}")
     print()
 
     # Load the architect prompt
@@ -179,10 +187,10 @@ async def generate_epics(spec_path: Path, model: str) -> None:
     )
 
     # Create the architect client
-    client = create_architect_client(model, architect_prompt)
+    client = create_architect_client(model, architect_prompt, project_dir)
 
     # Ensure epics/ directory exists
-    epics_dir = REPO_ROOT / "epics"
+    epics_dir = project_dir / "epics"
     epics_dir.mkdir(parents=True, exist_ok=True)
 
     print("Starting Architect Agent session...")
@@ -191,7 +199,7 @@ async def generate_epics(spec_path: Path, model: str) -> None:
 
     # Run the agent session
     async with client:
-        status, response = await run_agent_session(client, task_message, REPO_ROOT)
+        status, response = await run_agent_session(client, task_message, project_dir)
 
     if status == "error":
         print(f"\nArchitect Agent encountered an error: {response}")
@@ -202,11 +210,11 @@ async def generate_epics(spec_path: Path, model: str) -> None:
     print("  EPICS GENERATED")
     print("=" * 70)
     print()
-    print("Epics generated in epics/")
+    print(f"Epics generated in {project_dir / 'epics'}")
     print()
     print("Next steps:")
-    print("1. Review and edit each file in epics/ -- especially the human gate checklists")
-    print("2. Run: python autonomous_agent_demo.py --project-dir ./my-project --mode epic")
+    print(f"1. Review and edit each file in {project_dir / 'epics'} -- especially the human gate checklists")
+    print(f"2. Run: python autonomous_agent_demo.py --project-dir {project_dir} --mode epic")
     print()
 
 
@@ -244,7 +252,7 @@ def main() -> None:
 
     # Run the epic generator
     try:
-        asyncio.run(generate_epics(spec_path, args.model))
+        asyncio.run(generate_epics(spec_path, args.model, args.project_dir))
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
     except Exception as e:

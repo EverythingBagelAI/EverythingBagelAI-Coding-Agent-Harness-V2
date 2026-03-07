@@ -19,14 +19,19 @@ _DEFAULT_ALLOWED_COMMANDS: set[str] = {
     "ls", "cat", "head", "tail", "wc", "grep",
     # File operations
     "cp", "mkdir", "chmod",
+    "find", "echo", "touch", "mv", "rm", "sed", "awk",
     # Directory
     "pwd",
     # Node.js development
     "npm", "node", "npx",
+    # Python development
+    "python3", "python", "pytest", "pip", "pip3", "export",
     # Version control
     "git",
     # Process management
     "ps", "lsof", "sleep", "pkill",
+    # Network / archive
+    "curl", "wget", "unzip", "tar",
     # Script execution
     "init.sh",
 }
@@ -35,7 +40,7 @@ _DEFAULT_ALLOWED_COMMANDS: set[str] = {
 _allowed_commands: set[str] = set(_DEFAULT_ALLOWED_COMMANDS)
 
 # Commands that need additional validation even when in the allowlist
-COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh"}
+COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh", "rm"}
 
 
 def configure_allowed_commands(commands: set[str]) -> None:
@@ -265,6 +270,34 @@ def validate_chmod_command(command_string: str) -> tuple[bool, str]:
     return True, ""
 
 
+def validate_rm_command(command_string: str) -> tuple[bool, str]:
+    """
+    Validate rm commands — block dangerous patterns like rm -rf /.
+
+    Returns:
+        Tuple of (is_allowed, reason_if_blocked)
+    """
+    try:
+        tokens = shlex.split(command_string)
+    except ValueError:
+        return False, "Could not parse rm command"
+
+    if not tokens:
+        return False, "Empty rm command"
+
+    # Check for dangerous patterns
+    for token in tokens[1:]:
+        if token.startswith("-"):
+            continue
+        # Block absolute paths outside of common safe patterns
+        if token == "/" or token == "/*":
+            return False, "rm with root path is not allowed"
+        if token.startswith("/") and not token.startswith("/tmp"):
+            return False, f"rm with absolute path '{token}' is not allowed — use relative paths"
+
+    return True, ""
+
+
 def validate_init_script(command_string: str) -> tuple[bool, str]:
     """
     Validate init.sh script execution - only allow ./init.sh.
@@ -367,6 +400,10 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
                     return {"decision": "block", "reason": reason}
             elif cmd == "init.sh":
                 allowed, reason = validate_init_script(cmd_segment)
+                if not allowed:
+                    return {"decision": "block", "reason": reason}
+            elif cmd == "rm":
+                allowed, reason = validate_rm_command(cmd_segment)
                 if not allowed:
                     return {"decision": "block", "reason": reason}
 

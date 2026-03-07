@@ -45,10 +45,13 @@ SESSION_MCP_SCOPES: dict[str, list[str] | None] = {
 DEFAULT_ALLOWED_COMMANDS: set[str] = {
     "ls", "cat", "head", "tail", "wc", "grep",
     "cp", "mkdir", "chmod",
+    "find", "echo", "touch", "mv", "rm", "sed", "awk",
     "pwd",
     "npm", "node", "npx",
+    "python3", "python", "pytest", "pip", "pip3", "export",
     "git",
     "ps", "lsof", "sleep", "pkill",
+    "curl", "wget", "unzip", "tar",
     "init.sh",
 }
 
