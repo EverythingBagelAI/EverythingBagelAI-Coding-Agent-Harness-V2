@@ -8,12 +8,39 @@ and fetches issue data, then injects everything as pre-populated context
 blocks in the prompt so the agent never needs to discover state itself.
 """
 
+import logging
+import os
+import re
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
 
+import httpx
+
+
+logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
+
+REF_API_URL = "https://api.ref.tools/v1/search"
+
+# Common library/framework names to detect in spec text
+_KNOWN_LIBRARIES = [
+    "Next.js", "React", "Supabase", "Clerk", "Stripe", "Tailwind",
+    "shadcn", "FastAPI", "Pydantic", "Prisma", "Drizzle", "tRPC",
+    "Zustand", "Zod", "Playwright", "Vitest", "GSAP", "Remotion",
+    "Convex", "LangChain", "CopilotKit", "Vercel", "Render",
+    "PostgreSQL", "Redis", "Resend", "Inngest", "Upstash",
+    "NextAuth", "Auth.js", "Lucia", "Expo", "React Native",
+    "MagicUI", "Framer Motion", "Radix", "Headless UI",
+]
+
+# Patterns that indicate a tech stack / dependency section
+_TECH_SECTION_PATTERNS = re.compile(
+    r"(?:tech\s*stack|libraries|frameworks|dependencies|uses|built\s*with|external\s*integrations)",
+    re.IGNORECASE,
+)
 
 
 def load_prompt(name: str) -> str:
@@ -49,6 +76,93 @@ def copy_spec_to_project(project_dir: Path) -> None:
     if not spec_dest.exists():
         shutil.copy(spec_source, spec_dest)
         print("Copied app_spec.txt to project directory")
+
+
+# ---------------------------------------------------------------------------
+# Pre-fetch Ref documentation
+# ---------------------------------------------------------------------------
+
+def _extract_library_names(spec_text: str) -> list[str]:
+    """Extract library/framework names from spec text."""
+    found: list[str] = []
+    spec_lower = spec_text.lower()
+
+    for lib in _KNOWN_LIBRARIES:
+        if lib.lower() in spec_lower and lib not in found:
+            found.append(lib)
+
+    # Cap at 8 queries
+    return found[:8]
+
+
+def _fetch_ref_doc(query: str, api_key: str) -> tuple[str, str | None]:
+    """Fetch a single documentation result from Ref. Returns (query, content or None)."""
+    try:
+        response = httpx.get(
+            REF_API_URL,
+            headers={"x-ref-api-key": api_key},
+            params={"q": query, "limit": 1},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            results = response.json().get("results", [])
+            if results:
+                return query, results[0].get("content", "")
+    except Exception:
+        pass
+    return query, None
+
+
+def prefetch_ref_docs(spec_text: str, ref_api_key: str | None = None) -> str:
+    """
+    Parse spec_text for library/framework names and fetch relevant documentation
+    from the Ref API before the agent session starts.
+
+    Returns a formatted context block to inject into the agent prompt.
+    If REF_API_KEY is not set or fetch fails, returns empty string (graceful degradation).
+    """
+    api_key = ref_api_key or os.environ.get("REF_API_KEY")
+    if not api_key:
+        logger.info("[Ref Prefetch] REF_API_KEY not set — skipping documentation pre-fetch")
+        return ""
+
+    libraries = _extract_library_names(spec_text)
+    if not libraries:
+        return ""
+
+    logger.info("[Ref Prefetch] Fetching docs for: %s", ", ".join(libraries))
+
+    sections: list[str] = []
+
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {
+                executor.submit(_fetch_ref_doc, lib, api_key): lib
+                for lib in libraries
+            }
+
+            for future in as_completed(futures, timeout=15):
+                try:
+                    query, content = future.result(timeout=5)
+                    if content:
+                        sections.append(f"### {query}\n{content}")
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning("[Ref Prefetch] Error during documentation fetch: %s", e)
+        return ""
+
+    if not sections:
+        return ""
+
+    header = (
+        "## Pre-fetched Documentation\n\n"
+        "The following documentation was retrieved before this session. Use it as your "
+        "primary reference before making any ref_search_documentation calls — only call "
+        "Ref if you need information not covered here.\n\n"
+    )
+
+    return header + "\n\n".join(sections)
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +227,11 @@ def build_epic_initializer_context(epic_number: int, project_dir: Path) -> str:
     epic_spec = _read_file_or_note(spec_file, required=True)
     sections.append(_wrap_context(epic["spec_file"], epic_spec))
 
+    # 5. Pre-fetched Ref documentation
+    ref_docs = prefetch_ref_docs(epic_spec)
+    if ref_docs:
+        sections.append(ref_docs)
+
     header = (
         f"# Epic Initializer Context — Epic {epic_number}: {epic['name']}\n\n"
         "The following context has been programmatically injected by the harness. "
@@ -144,13 +263,20 @@ def build_coding_agent_session_prompt(
 
     # Shared context
     shared_path = project_dir / "shared_context.md"
-    if shared_path.exists():
-        sections.append(_wrap_context("shared_context.md", shared_path.read_text()))
+    shared_text = shared_path.read_text() if shared_path.exists() else ""
+    if shared_text:
+        sections.append(_wrap_context("shared_context.md", shared_text))
 
     # Build deviations
     deviations_path = project_dir / "build_deviations.md"
     if deviations_path.exists():
         sections.append(_wrap_context("build_deviations.md", deviations_path.read_text()))
+
+    # Pre-fetched Ref documentation
+    issue_desc = current_issue.get("description", "") if current_issue else ""
+    ref_docs = prefetch_ref_docs(issue_desc + " " + shared_text)
+    if ref_docs:
+        sections.append(ref_docs)
 
     # Current issue
     if current_issue is not None:

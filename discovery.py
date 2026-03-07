@@ -31,6 +31,16 @@ logger = logging.getLogger(__name__)
 CLAUDE_HOME = Path.home() / ".claude"
 CLAUDE_JSON = Path.home() / ".claude.json"
 
+# Session-scoped MCP loading — maps session types to the MCPs they need.
+# None = load all (preserves V1 behaviour). List = case-insensitive substring match.
+SESSION_MCP_SCOPES: dict[str, list[str] | None] = {
+    "architect": ["ref", "exa"],
+    "epic_initializer": ["linear"],
+    "coding": ["linear", "ref"],
+    "initializer": None,
+    "standard": None,
+}
+
 # Default bash commands always allowed for development
 DEFAULT_ALLOWED_COMMANDS: set[str] = {
     "ls", "cat", "head", "tail", "wc", "grep",
@@ -581,9 +591,51 @@ def _merge_mcp_servers(
     return merged
 
 
+def _filter_mcps_by_session(
+    merged: dict[str, Any],
+    session_type: str | None,
+) -> dict[str, Any]:
+    """
+    Filter merged MCP servers based on session type scope.
+
+    If session_type is None, unknown, or maps to None in SESSION_MCP_SCOPES,
+    returns the full dict unchanged (V1 behaviour).
+    """
+    if session_type is None:
+        return merged
+
+    scope = SESSION_MCP_SCOPES.get(session_type)
+    if scope is None:
+        return merged
+
+    total = len(merged)
+    filtered: dict[str, Any] = {}
+    matched_scopes: list[str] = []
+
+    for name, config in merged.items():
+        name_lower = name.lower()
+        for s in scope:
+            if s.lower() in name_lower:
+                filtered[name] = config
+                if s.lower() not in matched_scopes:
+                    matched_scopes.append(s.lower())
+                break
+
+    logger.info(
+        "[Discovery] Session type: %s — loading %d of %d configured MCPs (%s)",
+        session_type,
+        len(filtered),
+        total,
+        ", ".join(matched_scopes) if matched_scopes else "none",
+    )
+
+    return filtered
+
+
 def discover_user_ecosystem(
     project_dir: Path | None = None,
     linear_api_key: str | None = None,
+    session_type: str | None = None,
 ) -> EcosystemInfo:
     """
     Orchestrator — discovers the complete user ecosystem at runtime.
@@ -591,6 +643,8 @@ def discover_user_ecosystem(
     Args:
         project_dir: The project directory (for project-specific MCPs)
         linear_api_key: Linear API key (for harness-required MCP)
+        session_type: Optional session type for MCP scoping (e.g. "epic_initializer", "coding").
+                      When provided, filters merged MCPs to only those needed for the session type.
 
     Returns:
         Complete EcosystemInfo with all discovery results
@@ -624,6 +678,9 @@ def discover_user_ecosystem(
     merged_mcps = _merge_mcp_servers(
         global_servers, project_servers, harness_servers, warnings
     )
+
+    # Apply session-scoped MCP filtering
+    merged_mcps = _filter_mcps_by_session(merged_mcps, session_type)
 
     # 2. Load plugins and skills
     plugins = load_installed_plugins()
@@ -798,3 +855,7 @@ def print_discovery_summary(ecosystem: EcosystemInfo) -> None:
         print(f"  Config Files Missing: {', '.join(ecosystem.config_files_missing)}")
 
     print("\n" + "=" * 70 + "\n")
+
+
+# Alias for backward compatibility and verification scripts
+discover_mcps = discover_user_ecosystem

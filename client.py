@@ -12,7 +12,7 @@ from typing import Optional
 
 from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, HookMatcher
 
-from discovery import EcosystemInfo, build_dynamic_system_prompt, discover_user_ecosystem
+from discovery import EcosystemInfo, build_dynamic_system_prompt, discover_user_ecosystem, _filter_mcps_by_session
 from security import bash_security_hook
 
 
@@ -33,6 +33,7 @@ def create_client(
     mode: str = "greenfield",
     ecosystem: Optional[EcosystemInfo] = None,
     system_prompt_override: Optional[str] = None,
+    session_type: Optional[str] = None,
 ) -> ClaudeSDKClient:
     """
     Create a Claude Agent SDK client with dynamic configuration.
@@ -67,9 +68,12 @@ def create_client(
     if ecosystem is None:
         ecosystem = discover_user_ecosystem(project_dir, linear_api_key)
 
+    # Apply session-scoped MCP filtering
+    mcp_servers = _filter_mcps_by_session(ecosystem.merged_mcp_servers, session_type)
+
     # Build dynamic allowed tools: built-ins + wildcard per MCP server
     allowed_tools: list[str] = list(BUILTIN_TOOLS)
-    for server_name in ecosystem.merged_mcp_servers:
+    for server_name in mcp_servers:
         allowed_tools.append(f"mcp__{server_name}__*")
 
     # Build dynamic system prompt (or use override)
@@ -79,7 +83,7 @@ def create_client(
     print("Client Configuration:")
     print(f"   - Model: {model}")
     print(f"   - Mode: {mode}")
-    print(f"   - MCP servers: {len(ecosystem.merged_mcp_servers)}")
+    print(f"   - MCP servers: {len(mcp_servers)}")
     print(f"   - Allowed tools: {len(allowed_tools)}")
     if ecosystem.disallowed_tools:
         print(f"   - Disallowed tools: {len(ecosystem.disallowed_tools)}")
@@ -92,7 +96,7 @@ def create_client(
             system_prompt=system_prompt,
             allowed_tools=allowed_tools,
             disallowed_tools=ecosystem.disallowed_tools,
-            mcp_servers=ecosystem.merged_mcp_servers,
+            mcp_servers=mcp_servers,
             permission_mode="acceptEdits",
             hooks={
                 "PreToolUse": [

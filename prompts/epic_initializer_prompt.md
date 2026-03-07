@@ -34,6 +34,70 @@ Create issues in this order:
 - Every issue description must end with: `Acceptance criteria: [specific, testable conditions]`
 - For any issue that touches an external library, add: `Before implementing, use ref_search_documentation to look up: [specific query]`
 
+## Linear Issue Format Examples
+
+> These examples show the exact format expected. Consistent labelling, priority values (0=urgent, 1=high, 2=medium, 3=low), and description structure are critical — the Python orchestrator queries issues by label and title prefix to detect gates and snapshots.
+
+### Example 1: Feature Issue
+
+Tool: `mcp__linear__create_issue`
+Input:
+title: "Implement user authentication with Clerk"
+description: |
+Set up Clerk authentication provider and protect all authenticated routes.
+
+    Implementation notes:
+    - Install @clerk/nextjs
+    - Add ClerkProvider to app/layout.tsx
+    - Create middleware.ts with clerkMiddleware()
+    - Add sign-in and sign-up pages at /sign-in and /sign-up
+
+    Acceptance criteria: Given an unauthenticated user, when they visit /dashboard,
+    then they are redirected to /sign-in. Given a signed-in user, when they visit
+    /sign-in, then they are redirected to /dashboard.
+
+priority: 2
+labelNames: ["feature", "auth"]
+
+### Example 2: Setup Issue
+
+Tool: `mcp__linear__create_issue`
+Input:
+title: "Epic 1 setup — install dependencies and verify baseline"
+description: |
+Verify the development environment is working before starting feature work.
+
+    Steps:
+    - npm install
+    - npm install -D @playwright/test && npx playwright install chromium
+    - npm run dev (verify app starts on localhost:3000)
+    - Run git log --oneline -5 to confirm clean starting state
+
+    Acceptance criteria: Dev server starts without errors. No TypeScript errors on npm run build.
+
+priority: 1
+labelNames: ["setup"]
+
+### Example 3: Human Gate Issue
+
+Tool: `mcp__linear__create_issue`
+Input:
+title: "[HUMAN GATE] Setup required before Epic 2 can proceed"
+description: |
+Epic 1 is complete. The following manual steps are required before Epic 2
+(authentication) can be built and tested.
+
+    - [ ] CLERK_PUBLISHABLE_KEY: Get from Clerk dashboard > API Keys > Publishable key
+    - [ ] CLERK_SECRET_KEY: Get from Clerk dashboard > API Keys > Secret key
+    - [ ] Create a Clerk application at https://dashboard.clerk.com — enable Email/Password provider
+    - [ ] Add both keys to .env.local in the project root
+
+    When complete, mark this issue Done in Linear and re-run:
+    python autonomous_agent_demo.py --project-dir ./my-project --mode epic
+
+priority: 0
+labelNames: ["human-gate", "blocked"]
+
 ## What You Must NOT Do
 
 - Do not create more than 30 issues per epic
@@ -44,6 +108,7 @@ Create issues in this order:
 ## After Creating Issues
 
 1. Write `.linear_project.json` to the project root with this structure:
+
 ```json
 {
   "projectId": "[the Linear project ID just created]",
@@ -51,6 +116,7 @@ Create issues in this order:
   "epicName": "[name]"
 }
 ```
+
 The orchestrator reads this file immediately after the session exits.
 
 2. Write a brief summary to the terminal: how many issues created, what the first issue is, and (if applicable) what the human gate requires.

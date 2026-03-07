@@ -183,7 +183,8 @@ async def run_epic_mode(
 
             # Create client and run session
             client = create_client(
-                project_dir, model, mode="greenfield", ecosystem=ecosystem
+                project_dir, model, mode="greenfield", ecosystem=ecosystem,
+                session_type="coding",
             )
 
             async with client:

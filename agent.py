@@ -182,6 +182,7 @@ async def run_epic_initializer_session(
         mode="greenfield",
         ecosystem=ecosystem,
         system_prompt_override=system_prompt_text,
+        session_type="epic_initializer",
     )
 
     # The user message contains the full injected context
