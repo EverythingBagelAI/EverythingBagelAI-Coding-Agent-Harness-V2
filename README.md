@@ -1,282 +1,278 @@
-# EverythingBagelAI Coding Agent Harness
+# EverythingBagelAI Coding Agent Harness V2
 
-An autonomous coding agent that builds entire applications from a simple text description. You write what you want, it builds it — and you can watch every step in Linear.
+> Multi-epic autonomous coding harness built on the Claude Agent SDK. Decomposes large projects into ordered epics, builds each one autonomously with human review gates between them, and maintains architectural context across the full build.
 
-It automatically detects your existing Claude Code setup (MCP servers, plugins, skills) so it works with whatever you've already got configured.
-
-> Based on [gatopilantra/Linear-Coding-Agent-Harness](https://github.com/gatopilantra/Linear-Coding-Agent-Harness) by Cole Medin.
+Built on top of [Cole Medin's Linear Coding Agent Harness](https://github.com/coleam00/Linear-Coding-Agent-Harness), which itself implements [Anthropic's two-agent harness pattern](https://github.com/anthropics/claude-agent-sdk-demos).
 
 ---
 
-## What This Does
+## What's Different from V1 / Cole's Original
 
-You give it a description of what you want built (a text file called `app_spec.txt`). The harness then:
+**V1** (EverythingBagelAI-Coding-Agent-Harness) extended Cole's harness with MCP auto-discovery, brownfield support, and dynamic bash permissions. V2 adds:
 
-1. **Reads your spec** and breaks it into individual tasks (Linear issues)
-2. **Works through each task** one by one — writing code, testing it, committing
-3. **Tracks everything in Linear** so you can see exactly what's done, what's in progress, and what's left
-4. **Stops automatically** when everything is complete
-
-It works in two modes:
-- **Greenfield** — build something brand new from scratch
-- **Brownfield** — add features to an existing codebase
+- **Epic decomposition** — an Architect Agent reads your master spec and produces ordered, dependency-resolved epic sub-specs. The harness builds one epic at a time.
+- **Programmatic context injection** — Python pre-fetches the current Linear issue and architectural context before each agent session. The agent receives facts, not instructions to go discover state. This eliminates the most common class of autonomous agent failures.
+- **Human review gates** — auto-generated between epics requiring external setup (API keys, OAuth apps, DNS). The harness pauses, prints exactly what you need to do, and resumes where it left off when you re-run.
+- **Playwright over Puppeteer** — full e2e testing skill with plan → write → heal phases.
+- **Shared context + deviation tracking** — `shared_context.md` and `build_deviations.md` accumulate architectural decisions across all epics, so later epics build correctly on top of earlier ones.
+- **Direct Linear API** — harness state management uses the Linear GraphQL API directly from Python, not via MCP. MCP is reserved for the agent's work.
 
 ---
 
-## How It Works
-
-```
-You write app_spec.txt
-        |
-        v
-  Session 1: PLANNER
-  Reads your spec, creates a Linear project,
-  breaks the work into ~20-50 individual issues
-        |
-        v
-  Session 2+: BUILDER
-  Picks the highest-priority issue from Linear,
-  writes the code, tests it, marks it Done,
-  then moves to the next one
-        |
-        v
-  All issues Done? --> Stops automatically
-```
-
-Each session gets a **fresh context window** — the builder reads Linear to know what's been done and what to do next. This means it can handle large projects without running out of context.
-
----
-
-## Before You Start
-
-You need three things:
-
-### 1. Claude Code CLI
+## Prerequisites
 
 ```bash
-npm install -g @anthropic-ai/claude-code
+node --version     # v18+
+python3 --version  # 3.11+
+claude --version   # latest Claude Code CLI
 ```
 
-### 2. A Linear Account
-
-Linear is a project management tool (like Jira but better). The agent uses it to track all its work.
-
-1. Sign up at [linear.app](https://linear.app) if you don't have an account
-2. Go to **Settings > API** (or visit `https://linear.app/YOUR-TEAM/settings/api`)
-3. Create a new API key — copy it somewhere safe
-
-### 3. Python 3.11+
+Environment variables required:
 
 ```bash
-python3 --version  # Check you have 3.11 or higher
+export ANTHROPIC_API_KEY='sk-ant-...'
+export LINEAR_API_KEY='lin_api_...'        # linear.app → Settings → API
+```
+
+MCP servers (add once via Claude Code CLI, auto-discovered by harness):
+
+```bash
+# Linear — OAuth, run once then authenticate in Claude Code
+claude mcp add linear --transport http https://mcp.linear.app/mcp
+
+# Ref — documentation lookup (get key from ref.tools)
+claude mcp add ref --transport http https://api.ref.tools/mcp \
+  --header "x-ref-api-key: YOUR_REF_API_KEY"
+
+# Exa — web research
+claude mcp add exa --transport stdio -e EXA_API_KEY=your_key -- npx -y exa-mcp-server
+```
+
+Playwright (install once globally):
+
+```bash
+npm install -D @playwright/test
+npx playwright install chromium
 ```
 
 ---
 
-## Quick Start
-
-### 1. Clone and install
+## Setup
 
 ```bash
-git clone https://github.com/EverythingBagelAI/EverythingBagelAI-Coding-Agent-Harness.git
-cd EverythingBagelAI-Coding-Agent-Harness
+# 1. Clone
+git clone https://github.com/EverythingBagelAI/EverythingBagelAI-Coding-Agent-Harness-V2.git
+cd EverythingBagelAI-Coding-Agent-Harness-V2
+
+# 2. Install Python dependencies
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
+
+# 3. Write your master spec (500-1500 words)
+cp templates/master_app_spec_template.md prompts/master_app_spec.md
+# edit prompts/master_app_spec.md
+
+# 4. Generate epic sub-specs
+python generate_epics.py
+# Produces epics/ directory and shared_context.md
+# Review and edit before running — this is your cheapest quality gate
+
+# 5. Run
+python autonomous_agent_demo.py --project-dir ./my-project --mode epic
 ```
-
-### 2. Set your API keys
-
-```bash
-# Generate your Claude token
-claude setup-token
-
-# Set both keys (add these to your shell profile to make them permanent)
-export CLAUDE_CODE_OAUTH_TOKEN='your-token-here'
-export LINEAR_API_KEY='lin_api_xxxxxxxxxxxxx'
-```
-
-### 3. Write your app spec
-
-Edit `prompts/app_spec.txt` with a description of what you want built. Be specific — include features, tech stack, file structure, and how it should work. There's an example in the file to get you started.
-
-### 4. Run it
-
-**New project (greenfield):**
-```bash
-python3 autonomous_agent_demo.py --project-dir ./my-app
-```
-
-**Adding to an existing project (brownfield):**
-```bash
-python3 autonomous_agent_demo.py --mode brownfield --existing-dir /path/to/your/repo
-```
-
-That's it. Open your Linear workspace to watch it work.
 
 ---
 
-## What Happens When You Run It
+## Usage
 
-### First session (10-20 minutes)
+### Epic Mode (new in V2)
 
-The planner agent reads your spec and creates Linear issues. Your terminal will look something like this:
-
-```
-======================================================================
-  EVERYTHINGBAGELAI CODING AGENT HARNESS
-======================================================================
-
-  ECOSYSTEM DISCOVERY
-  MCP Servers (5 total): linear, puppeteer, filesystem, memory, exa
-  Plugins (3): document-skills, superpowers, recall
-  Skills (2): ui-ux-pro-max, mermaid-visualizer
-
-  SESSION 1: INITIALIZER
-  [Tool: mcp__linear__create_issue]  <-- Creating issues in Linear
-  [Tool: mcp__linear__create_issue]
-  ...
-```
-
-This is normal — it's creating all the tasks. Don't close the terminal.
-
-### Subsequent sessions (a few minutes each)
-
-The builder picks up one issue at a time:
-
-```
-  SESSION 2: CODING AGENT
-  [Tool: mcp__linear__list_issues]   <-- Checking what's left to do
-  [Tool: Write]                      <-- Writing code
-  [Tool: Bash]                       <-- Running it
-  [Tool: mcp__puppeteer__screenshot] <-- Testing in the browser
-
-  PROJECT COMPLETE                   <-- Done!
-```
-
-### In Linear
-
-You'll see a project with all issues organised by priority. As the agent works, issues move from **Todo** to **In Progress** to **Done**. Each issue gets comments explaining what was implemented.
-
----
-
-## Your Setup is Automatically Detected
-
-When the harness starts, it scans your Claude Code configuration and picks up:
-
-- **MCP servers** you've configured (globally and per-project)
-- **Plugins** you've installed
-- **Skills** you've added
-- **Bash commands** you've approved in your settings
-
-Everything merges together automatically. The agent gets access to all your tools alongside the ones it needs (Linear + Puppeteer).
-
-If you have task management frameworks installed (like GSD or similar), the harness automatically excludes them to avoid conflicts — the agent uses Linear for task management instead.
-
----
-
-## Customisation
-
-### Change what gets built
-
-Edit `prompts/app_spec.txt`. This is the only file you need to change. Write a clear description of your application including:
-- What it does
-- Technology stack
-- Features (numbered list works well)
-- File structure
-- How to run it
-
-### Use a different model
+For large projects — anything that would overflow a single agent's context or take more than a few hours to build.
 
 ```bash
-python3 autonomous_agent_demo.py --project-dir ./my-app --model claude-sonnet-4-5-20250929
+python autonomous_agent_demo.py --project-dir ./my-project --mode epic
 ```
 
-Default is Claude Opus 4.5 (`claude-opus-4-5-20251101`).
+The harness will:
 
-### Limit the number of sessions
+1. Run an Architect Agent to decompose your spec into ordered epics
+2. For each epic: run an Epic Initializer to create a Linear project + issues, then loop coding agent sessions until all issues are resolved
+3. Pause at human gates and print exactly what setup is required
+4. Resume from where it left off when you re-run after completing a gate
+
+**Human gate example:**
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏸  HUMAN GATE — Epic 2 complete, setup required
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- [ ] CLERK_PUBLISHABLE_KEY: from Clerk dashboard → API Keys
+- [ ] CLERK_SECRET_KEY: from Clerk dashboard → API Keys
+- [ ] Create Clerk application with email/password provider enabled
+
+Once complete:
+1. Mark the gate issue Done in Linear
+2. Re-run: python autonomous_agent_demo.py --project-dir ./my-project --mode epic
+```
+
+### Greenfield Mode (V1, unchanged)
+
+For smaller projects that fit in a single build sequence:
 
 ```bash
-python3 autonomous_agent_demo.py --project-dir ./my-app --max-iterations 5
+python autonomous_agent_demo.py --project-dir ./my-project --mode greenfield
 ```
 
-Useful for testing. The agent will stop after 5 sessions even if there are issues left. Run the same command again to continue where it left off.
+### Brownfield Mode (V1, unchanged)
 
-### Add bash commands to the allowlist
+For extending an existing codebase:
 
-The security layer only allows specific commands. If the agent needs a command that's blocked, add it to `security.py` in the `_DEFAULT_ALLOWED_COMMANDS` set.
-
-Your existing Claude Code bash permissions (from `settings.local.json`) are automatically merged in — you shouldn't need to change this in most cases.
+```bash
+python autonomous_agent_demo.py --project-dir ./existing-project --mode brownfield \
+  --existing-dir /path/to/existing/code
+```
 
 ---
 
-## Command Line Options
+## Writing a Good Master Spec
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--project-dir` | Where to create the new project | `./autonomous_demo_project` |
-| `--mode` | `greenfield` (new) or `brownfield` (existing) | `greenfield` |
-| `--existing-dir` | Path to existing repo (brownfield only) | — |
-| `--max-iterations` | Stop after N sessions | Unlimited |
-| `--model` | Claude model to use | `claude-opus-4-5-20251101` |
+The master spec is the single most important quality input. A well-written 1,000-word spec produces dramatically better epics than a vague 3,000-word one.
+
+Use the template at `templates/master_app_spec_template.md`. Key sections:
+
+- **Purpose** — one paragraph. What the app does and who it's for.
+- **Tech stack** — be specific: Next.js 15, Supabase, Clerk, Vercel. The Architect Agent uses this to write accurate API contracts.
+- **Key user flows** — 8-15 numbered flows describing what a user _does_, not what features exist.
+- **Feature list** — loosely grouped by natural epic boundary.
+- **Anti-patterns** — 5-10 things the agent must never do in this specific project. This section has outsized impact on output quality.
+
+After running `generate_epics.py`, **review the epics before running the harness**. Edit:
+
+- Human gate checklists — make sure they reflect what you actually need to set up
+- Epic ordering — if the Architect got a dependency wrong, fix it in `epics/spec_index.json`
+- Feature scope — split an epic if it has 25+ issues; merge if one has fewer than 8
 
 ---
 
-## Project Structure
+## File Structure
 
 ```
-EverythingBagelAI-Coding-Agent-Harness/
-├── autonomous_agent_demo.py  # Entry point — run this
-├── agent.py                  # Main agent loop and session logic
-├── client.py                 # Claude SDK client configuration
-├── discovery.py              # Detects your Claude Code setup automatically
-├── security.py               # Bash command allowlist and validation
-├── progress.py               # Tracks progress via .linear_project.json
-├── prompts.py                # Loads prompt files
-├── linear_config.py          # Linear API configuration
+├── autonomous_agent_demo.py      # Entry point — greenfield/brownfield/epic modes
+├── epic_orchestrator.py          # Epic mode loop: gate checking, initializer, coding sessions
+├── agent.py                      # Agent session logic
+├── linear_client.py              # Direct Linear GraphQL client for harness state management
+├── client.py                     # Claude Agent SDK + MCP configuration
+├── discovery.py                  # Auto-detects global Claude Code MCP config and merges it
+├── progress.py                   # Session + epic state persistence (claude-progress.txt)
+├── prompts.py                    # Prompt loading + programmatic context injection
+├── security.py                   # Bash command allowlist
+├── generate_epics.py             # Standalone Architect Agent script (run before harness)
+│
 ├── prompts/
-│   ├── app_spec.txt              # YOUR APP DESCRIPTION GOES HERE
-│   ├── initializer_prompt.md     # Planner agent instructions
-│   ├── brownfield_initializer_prompt.md  # Brownfield planner instructions
-│   └── coding_prompt.md          # Builder agent instructions
-├── test_security.py          # Security tests
-├── requirements.txt          # Python dependencies
-└── generations/              # Where greenfield projects are created (gitignored)
+│   ├── master_app_spec.md        # Your app description (you write this)
+│   ├── architect_prompt.md       # Architect Agent system prompt
+│   ├── initializer_prompt.md     # V1 initializer (greenfield/brownfield)
+│   ├── epic_initializer_prompt.md  # Epic Initializer system prompt
+│   └── coding_prompt.md          # Coding Agent system prompt
+│
+├── templates/
+│   ├── master_app_spec_template.md  # Start here when writing a new spec
+│   └── epic_spec_template.md        # Format reference for individual epic specs
+│
+└── .claude/
+    └── skills/
+        └── e2e-test/
+            └── SKILL.md          # Playwright testing skill (plan → write → heal)
+```
+
+**Generated per project** (lives alongside your application code, git-committed):
+
+```
+my-project/
+├── .linear_project.json      # Current epic's Linear project ID
+├── claude-progress.txt       # Session + epic state (edit to reset if needed)
+├── shared_context.md         # Cross-epic design system, data model, API contracts
+├── build_deviations.md       # Agent decisions that diverged from the spec
+├── epics/
+│   ├── spec_index.md         # Human-readable epic dependency graph
+│   ├── spec_index.json       # Machine-readable index (used by harness)
+│   ├── epic-01-foundation.md
+│   └── epic-02-auth.md
+└── [application code]
 ```
 
 ---
 
 ## Troubleshooting
 
-**"CLAUDE_CODE_OAUTH_TOKEN not set"**
-Run `claude setup-token` in your terminal, then `export CLAUDE_CODE_OAUTH_TOKEN='the-token-it-gives-you'`.
+**`ANTHROPIC_API_KEY not set`**
 
-**"LINEAR_API_KEY not set"**
-Go to your Linear settings > API, create a key, then `export LINEAR_API_KEY='lin_api_...'`.
+```bash
+export ANTHROPIC_API_KEY='sk-ant-...'
+```
 
-**First run seems to hang**
-Normal. The planner is creating 20-50 Linear issues with detailed descriptions. Watch for `[Tool: mcp__linear__create_issue]` lines — that means it's working. Give it 10-20 minutes.
+**`LINEAR_API_KEY not set`**
+Get your key from linear.app → Settings → API → Create Key.
 
-**"Command blocked by security hook"**
-The agent tried to run a command that's not in the allowlist. If you trust the command, add it to `_DEFAULT_ALLOWED_COMMANDS` in `security.py`.
+**Harness appears to hang on first run**
+Normal. The Epic Initializer is creating a Linear project and 15-30 issues. Watch for `[Tool: mcp__linear__create_issue]` output. Can take 5-10 minutes.
 
-**"MCP server connection failed"**
-Check that your `LINEAR_API_KEY` is valid and has read/write permissions.
+**`Error: Claude Code cannot be launched inside another Claude Code session`**
+You're running the harness from inside an active Claude Code session. Exit Claude Code first and run from a regular terminal.
+
+**Agent picks up the wrong issue or repeats a completed one**
+The harness fetches the current issue directly from Linear before each session. If an issue shows as incomplete but was actually finished, mark it Done in Linear and re-run.
+
+**Human gate not detected / harness doesn't pause**
+Gate detection looks for issues with titles starting `[HUMAN GATE]`. If the Epic Initializer named it differently, rename the issue in Linear to start with `[HUMAN GATE]` and re-run.
+
+**`epics/spec_index.json not found`**
+Re-run `python generate_epics.py`. The JSON index is required — the markdown version is for human reading only.
+
+**Playwright not found in later epics**
+Run manually in the project directory:
+
+```bash
+npm install -D @playwright/test && npx playwright install chromium
+```
 
 ---
 
-## Based On
+## Lineage
 
-This project is a fork of [Linear-Coding-Agent-Harness](https://github.com/gatopilantra/Linear-Coding-Agent-Harness) by Cole Medin.
+### Anthropic's Two-Agent Harness Pattern
 
-**What's different:**
-- Automatically detects your Claude Code ecosystem (MCP servers, plugins, skills, bash permissions)
-- Supports brownfield development (adding features to existing codebases)
-- Auto-excludes conflicting task management frameworks
-- Dynamic security allowlist (merges your existing permissions)
-- Automatic completion detection (stops when all issues are Done)
-- Migrated to Claude Agent SDK
+The foundation. Anthropic's harness research established the core pattern: a short-lived **Initializer** session that creates a structured task list, followed by repeated **Coding Agent** sessions that each work one task and hand off via shared state. Key insight: agents fail by trying to do too much in one session. Splitting initialisation from implementation, and keeping each coding session focused on one issue, avoids both one-shotting and premature completion.
 
----
+Key design decisions from Anthropic's pattern: task lists as JSON not markdown (agents corrupt markdown), a non-negotiable session startup ritual (pwd → read progress → read task list → run init.sh → implement ONE task → verify → commit → update progress).
 
-## Licence
+### Cole Medin's Linear Coding Agent Harness
 
-MIT — see [LICENSE](LICENSE) for details.
+[github.com/coleam00/Linear-Coding-Agent-Harness](https://github.com/coleam00/Linear-Coding-Agent-Harness)
+
+Cole implemented Anthropic's pattern with Linear as the task tracker and Puppeteer MCP for browser testing. The key improvement: Linear gives real-time visibility into agent progress and survives session restarts cleanly — the agent queries Linear to find what to work on next rather than reading a local file that could be stale or corrupted.
+
+### EverythingBagelAI V1
+
+[github.com/EverythingBagelAI/EverythingBagelAI-Coding-Agent-Harness](https://github.com/EverythingBagelAI/EverythingBagelAI-Coding-Agent-Harness)
+
+Extended Cole's harness with:
+
+- **`discovery.py`** — auto-detects the global Claude Code MCP config (`~/.claude.json`) and merges all configured servers into every agent session. Add a new MCP to Claude Code once; every harness run picks it up automatically.
+- **Brownfield mode** — point the harness at an existing codebase and it generates issues for extending or refactoring rather than greenfield building.
+- **Dynamic bash permissions** — merges the project's existing Claude Code bash allowlist with the harness security policy.
+- **Migrated to Claude Agent SDK** — moved from subprocess invocation to the proper Python SDK.
+
+### EverythingBagelAI V2 (this repo)
+
+Built to handle projects too large for a single linear build sequence. The core problems with V1 on large projects: context window saturation after 20+ issues, no way to inject external service setup mid-build, and architectural drift across long sessions where later issues contradict decisions made in earlier ones.
+
+V2 solutions:
+
+- **Epic decomposition** — an Architect Agent pre-decomposes the spec into 4-7 ordered epics of 10-25 issues each. Each epic gets a fresh agent context.
+- **Programmatic context injection** — Python assembles the complete prompt for each agent session, including the specific issue to work on fetched directly from Linear. The agent never discovers state — it receives facts. This is the single biggest reliability improvement over V1.
+- **Human gates** — natural epic boundaries that require external service setup become explicit pause points with auto-generated checklists.
+- **Cross-epic memory** — `shared_context.md` and `build_deviations.md` carry architectural decisions forward so Epic 4 builds correctly on top of what Epic 1 actually built, which may differ from what was originally specced.
+- **Playwright** — replaced Puppeteer MCP with Playwright CLI. Simpler, more reliable, no MCP server process to manage.
+- **Direct Linear API** — `linear_client.py` handles all harness orchestration state queries via GraphQL directly. MCP Linear tools are reserved for the agent's own issue management work.
