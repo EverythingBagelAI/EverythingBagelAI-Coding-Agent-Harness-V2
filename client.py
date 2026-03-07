@@ -34,6 +34,7 @@ def create_client(
     ecosystem: Optional[EcosystemInfo] = None,
     system_prompt_override: Optional[str] = None,
     session_type: Optional[str] = None,
+    max_turns: int = 200,
 ) -> ClaudeSDKClient:
     """
     Create a Claude Agent SDK client with dynamic configuration.
@@ -103,7 +104,7 @@ def create_client(
                     HookMatcher(matcher="Bash", hooks=[bash_security_hook]),
                 ],
             },
-            max_turns=200,
+            max_turns=max_turns,
             cwd=str(project_dir.resolve()),
         )
     )

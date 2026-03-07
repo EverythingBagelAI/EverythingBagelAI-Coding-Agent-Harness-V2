@@ -17,6 +17,7 @@ from claude_agent_sdk import ClaudeSDKClient
 from client import create_client
 from discovery import EcosystemInfo, discover_user_ecosystem, print_discovery_summary
 from progress import (
+    acquire_harness_lock,
     print_session_header,
     print_progress_summary,
     is_linear_initialized,
@@ -248,6 +249,9 @@ async def run_autonomous_agent(
     # Create project directory
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    # Acquire harness lock — prevents two instances from running on the same project
+    _lock_fd = acquire_harness_lock(project_dir)  # noqa: F841 — prevent GC releasing the lock
+
     # --- Dynamic Ecosystem Discovery ---
     linear_api_key = os.environ.get("LINEAR_API_KEY", "")
     ecosystem = discover_user_ecosystem(project_dir, linear_api_key)
@@ -290,6 +294,8 @@ async def run_autonomous_agent(
 
     # Main loop
     iteration = 0
+    consecutive_errors = 0
+    MAX_CONSECUTIVE_ERRORS = 5
 
     while True:
         iteration += 1
@@ -348,11 +354,18 @@ async def run_autonomous_agent(
             print(f"\nAgent will auto-continue in {AUTO_CONTINUE_DELAY_SECONDS}s...")
             print_progress_summary(project_dir)
             await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
+            consecutive_errors = 0
 
         elif status == "error":
-            print("\nSession encountered an error")
-            print("Will retry with a fresh session...")
-            await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
+            consecutive_errors += 1
+            if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
+                print(f"\n  {MAX_CONSECUTIVE_ERRORS} consecutive errors. Stopping to prevent cost overrun.")
+                print("  Check your API credentials and Linear connection, then re-run.")
+                return
+
+            backoff = min(2 ** consecutive_errors, 60)
+            print(f"\nSession error. Retrying in {backoff}s...")
+            await asyncio.sleep(backoff)
 
         # Small delay between sessions
         if max_iterations is None or iteration < max_iterations:

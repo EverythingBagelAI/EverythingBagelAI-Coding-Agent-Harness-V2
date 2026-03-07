@@ -38,7 +38,7 @@ Create issues in this order:
 
 ## Linear Issue Format Examples
 
-> These examples show the exact format expected. Consistent labelling, priority values (0=urgent, 1=high, 2=medium, 3=low), and description structure are critical — the Python orchestrator queries issues by label and title prefix to detect gates and snapshots.
+> These examples show the exact format expected. Consistent labelling, priority values (1=urgent, 2=high, 3=medium, 4=low; 0=no priority), and description structure are critical — the Python orchestrator queries issues by label and title prefix to detect gates and snapshots.
 
 ### Example 1: Feature Issue
 
@@ -97,7 +97,7 @@ Epic 1 is complete. The following manual steps are required before Epic 2
     When complete, mark this issue Done in Linear and re-run:
     python autonomous_agent_demo.py --project-dir ./my-project --mode epic
 
-priority: 0
+priority: 4
 labelNames: ["human-gate", "blocked"]
 
 ## What You Must NOT Do

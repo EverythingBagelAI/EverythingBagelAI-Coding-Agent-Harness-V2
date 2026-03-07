@@ -73,7 +73,7 @@ Environment Variables:
         "--project-dir",
         type=Path,
         default=Path("./autonomous_demo_project"),
-        help="Directory for the project (default: generations/autonomous_demo_project). Relative paths automatically placed in generations/ directory.",
+        help="Directory for the project. In greenfield mode, relative paths are placed in generations/. In epic mode, used literally to match generate_epics.py.",
     )
 
     parser.add_argument(
@@ -151,13 +151,10 @@ def main() -> None:
             print("  Continuing anyway...\n")
 
     elif mode == "epic":
-        # Epic mode uses --project-dir as the target project directory
+        # Epic mode: use --project-dir literally to match generate_epics.py
         project_dir = args.project_dir
-        if not str(project_dir).startswith("generations/"):
-            if project_dir.is_absolute():
-                pass
-            else:
-                project_dir = Path("generations") / project_dir
+        if not project_dir.is_absolute():
+            project_dir = project_dir.resolve()
 
     else:
         # Greenfield: existing behaviour — place in generations/

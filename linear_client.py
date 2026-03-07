@@ -14,7 +14,20 @@ import httpx
 logger = logging.getLogger(__name__)
 
 LINEAR_API_URL = "https://api.linear.app/graphql"
+LINEAR_PROJECT_MARKER = ".linear_project.json"
 MAX_RETRIES = 3
+
+HUMAN_GATE_MARKER = "[HUMAN GATE]"
+SNAPSHOT_MARKER = "[SNAPSHOT]"
+
+
+def _parse_retry_after(headers, fallback: int) -> int:
+    """Safely parse retry-after header, falling back to provided default."""
+    value = headers.get("retry-after", "")
+    try:
+        return max(1, int(float(value)))
+    except (ValueError, TypeError):
+        return fallback
 
 
 def _headers() -> dict:
@@ -39,7 +52,7 @@ def _query(query: str, variables: dict | None = None) -> dict:
         )
         last_response = response
         if response.status_code == 429:
-            retry_after = int(response.headers.get("retry-after", str(2 ** attempt)))
+            retry_after = _parse_retry_after(response.headers, 2 ** attempt)
             print(f"  Linear rate limited. Retrying in {retry_after}s...")
             time.sleep(retry_after)
             continue
@@ -103,7 +116,7 @@ def get_current_issue(project_id: str) -> Optional[dict]:
     issues = project.get("issues", {}).get("nodes", [])
     for issue in issues:
         title = issue["title"]
-        if title.upper().startswith("[HUMAN GATE]") or title.upper().startswith("[SNAPSHOT]"):
+        if title.upper().startswith(HUMAN_GATE_MARKER) or title.upper().startswith(SNAPSHOT_MARKER):
             continue
         return issue
     return None
@@ -119,7 +132,6 @@ def get_human_gate_issue(project_id: str) -> Optional[dict]:
     query GetHumanGate($projectId: String!) {
       project(id: $projectId) {
         issues(
-          filter: { title: { startsWith: "[HUMAN GATE]" } }
           orderBy: createdAt
         ) {
           nodes {
@@ -138,7 +150,8 @@ def get_human_gate_issue(project_id: str) -> Optional[dict]:
         logger.warning("Project %s returned None from Linear API", project_id)
         return None
     issues = project.get("issues", {}).get("nodes", [])
-    return issues[-1] if issues else None
+    gate_issues = [i for i in issues if i["title"].upper().startswith(HUMAN_GATE_MARKER)]
+    return gate_issues[-1] if gate_issues else None
 
 
 def is_human_gate_resolved(issue_id: str) -> bool:
@@ -180,7 +193,7 @@ def get_snapshot_issue(project_id: str) -> Optional[dict]:
         return None
     issues = project.get("issues", {}).get("nodes", [])
     for issue in issues:
-        if "[SNAPSHOT]" in issue.get("title", "").upper():
+        if SNAPSHOT_MARKER in issue.get("title", "").upper():
             return issue
     return None
 
@@ -210,7 +223,7 @@ def get_all_issues_complete(project_id: str) -> bool:
     issues = project.get("issues", {}).get("nodes", [])
     for issue in issues:
         title = issue["title"]
-        if title.upper().startswith("[HUMAN GATE]") or title.upper().startswith("[SNAPSHOT]"):
+        if title.upper().startswith(HUMAN_GATE_MARKER) or title.upper().startswith(SNAPSHOT_MARKER):
             continue
         if issue["state"]["type"] not in ("completed", "cancelled"):
             return False

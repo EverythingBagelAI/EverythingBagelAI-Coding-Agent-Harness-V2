@@ -30,8 +30,8 @@ _DEFAULT_ALLOWED_COMMANDS: set[str] = {
     "git",
     # Process management
     "ps", "lsof", "sleep", "pkill",
-    # Network / archive
-    "curl", "wget", "unzip", "tar",
+    # Archive
+    "unzip", "tar",
     # Script execution
     "init.sh",
 }
@@ -40,7 +40,7 @@ _DEFAULT_ALLOWED_COMMANDS: set[str] = {
 _allowed_commands: set[str] = set(_DEFAULT_ALLOWED_COMMANDS)
 
 # Commands that need additional validation even when in the allowlist
-COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh", "rm"}
+COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh", "rm", "git"}
 
 
 def configure_allowed_commands(commands: set[str]) -> None:
@@ -271,12 +271,7 @@ def validate_chmod_command(command_string: str) -> tuple[bool, str]:
 
 
 def validate_rm_command(command_string: str) -> tuple[bool, str]:
-    """
-    Validate rm commands — block dangerous patterns like rm -rf /.
-
-    Returns:
-        Tuple of (is_allowed, reason_if_blocked)
-    """
+    """Validate rm — block path traversal outside project dir."""
     try:
         tokens = shlex.split(command_string)
     except ValueError:
@@ -285,15 +280,45 @@ def validate_rm_command(command_string: str) -> tuple[bool, str]:
     if not tokens:
         return False, "Empty rm command"
 
-    # Check for dangerous patterns
     for token in tokens[1:]:
         if token.startswith("-"):
             continue
-        # Block absolute paths outside of common safe patterns
-        if token == "/" or token == "/*":
-            return False, "rm with root path is not allowed"
-        if token.startswith("/") and not token.startswith("/tmp"):
-            return False, f"rm with absolute path '{token}' is not allowed — use relative paths"
+        # Block absolute paths
+        if token.startswith("/"):
+            return False, "rm with absolute paths is not permitted"
+        # Block path traversal
+        if ".." in token:
+            return False, "rm with path traversal (..) is not permitted"
+        # Block home directory references
+        if token.startswith("~"):
+            return False, "rm with ~ paths is not permitted"
+
+    return True, ""
+
+
+def validate_git_command(command_string: str) -> tuple[bool, str]:
+    """Validate git commands — block destructive remote operations."""
+    BLOCKED_SUBCOMMANDS = {
+        "push",       # Never push without human review
+        "remote",     # Don't let agent add/change remotes
+        "reset",      # Too destructive
+        "rebase",     # Too destructive
+    }
+    try:
+        tokens = shlex.split(command_string)
+    except ValueError:
+        return False, "Could not parse git command"
+
+    if len(tokens) < 2:
+        return True, ""  # bare `git` is fine
+
+    subcommand = tokens[1].lstrip("-")
+    if subcommand in BLOCKED_SUBCOMMANDS:
+        return False, f"git {subcommand} is not permitted — human review required"
+
+    # Block --force flag anywhere in the command
+    if "--force" in tokens or "-f" in tokens:
+        return False, "git --force is not permitted"
 
     return True, ""
 
@@ -414,6 +439,10 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
                         return {"decision": "block", "reason": reason}
                 elif cmd == "rm":
                     allowed, reason = validate_rm_command(segment)
+                    if not allowed:
+                        return {"decision": "block", "reason": reason}
+                elif cmd == "git":
+                    allowed, reason = validate_git_command(segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
 

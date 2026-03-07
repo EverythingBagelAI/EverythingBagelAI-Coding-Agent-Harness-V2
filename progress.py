@@ -13,7 +13,7 @@ import logging
 import os
 from pathlib import Path
 
-from linear_config import LINEAR_PROJECT_MARKER
+from linear_client import LINEAR_PROJECT_MARKER
 
 logger = logging.getLogger(__name__)
 

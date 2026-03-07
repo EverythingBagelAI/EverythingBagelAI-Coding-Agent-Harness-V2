@@ -19,6 +19,12 @@ Built on top of [Cole Medin's Linear Coding Agent Harness](https://github.com/co
 
 ---
 
+## Requirements
+
+- **OS:** macOS or Linux (Unix/POSIX). Windows is not supported due to `fcntl` file locking.
+- **Python:** 3.11+
+- **Node.js:** 18+
+
 ## Prerequisites
 
 ```bash
@@ -33,6 +39,10 @@ Environment variables required:
 export CLAUDE_CODE_OAUTH_TOKEN='your-oauth-token'
 export LINEAR_API_KEY='lin_api_...'        # linear.app → Settings → API
 ```
+
+Optional:
+
+- `REF_API_KEY` — Used to pre-fetch library documentation for the coding agent. Get one at https://ref.tools. If absent, the harness runs without doc pre-fetching.
 
 MCP servers (add once via Claude Code CLI, auto-discovered by harness):
 
@@ -67,6 +77,8 @@ cd EverythingBagelAI-Coding-Agent-Harness-V2
 # 2. Install Python dependencies
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
+# Note: claude-agent-sdk is the Anthropic Claude Agent SDK.
+# If pip cannot find it, install from: pip install claude-agent-sdk
 
 # 3. Write your master spec (500-1500 words)
 cp templates/master_app_spec_template.md prompts/master_app_spec.md
@@ -118,15 +130,17 @@ Once complete:
 
 ### Greenfield Mode (V1, unchanged)
 
-For smaller projects that fit in a single build sequence:
+For smaller projects that fit in a single build sequence. Create `prompts/app_spec.txt` in the harness root with your application specification, then run:
 
 ```bash
 python autonomous_agent_demo.py --project-dir ./my-project --mode greenfield
 ```
 
+The agent reads `app_spec.txt` to understand what to build.
+
 ### Brownfield Mode (V1, unchanged)
 
-For extending an existing codebase:
+For extending an existing codebase. Also requires `prompts/app_spec.txt` describing the work to be done:
 
 ```bash
 python autonomous_agent_demo.py --project-dir ./existing-project --mode brownfield \

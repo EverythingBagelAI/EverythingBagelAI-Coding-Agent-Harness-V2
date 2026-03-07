@@ -18,12 +18,10 @@ import os
 import sys
 from pathlib import Path
 
-from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, HookMatcher
-
 from agent import run_agent_session
-from client import BUILTIN_TOOLS
+from client import create_client
 from discovery import discover_user_ecosystem, print_discovery_summary
-from security import bash_security_hook, configure_allowed_commands
+from security import configure_allowed_commands
 
 
 # Configuration
@@ -79,12 +77,11 @@ def create_architect_client(
     model: str,
     system_prompt: str,
     project_dir: Path,
-) -> ClaudeSDKClient:
+):
     """
     Create a Claude Agent SDK client configured for the Architect Agent.
 
-    Follows the same pattern as client.py's create_client but tailored
-    for epic generation rather than the full coding harness.
+    Wraps client.py's create_client with architect-specific settings.
 
     Args:
         model: Claude model to use
@@ -103,39 +100,14 @@ def create_architect_client(
     # Configure security with discovered commands
     configure_allowed_commands(ecosystem.merged_allowed_commands)
 
-    # Built-in tools always available
-    allowed_tools: list[str] = list(BUILTIN_TOOLS)
-
-    # Add wildcard per MCP server
-    for server_name in ecosystem.merged_mcp_servers:
-        allowed_tools.append(f"mcp__{server_name}__*")
-
-    # Print client configuration summary
-    print("Architect Client Configuration:")
-    print(f"   - Model: {model}")
-    print(f"   - MCP servers: {len(ecosystem.merged_mcp_servers)}")
-    print(f"   - Allowed tools: {len(allowed_tools)}")
-    if ecosystem.disallowed_tools:
-        print(f"   - Disallowed tools: {len(ecosystem.disallowed_tools)}")
-    print(f"   - Bash allowlist: {len(ecosystem.merged_allowed_commands)} commands")
-    print()
-
-    return ClaudeSDKClient(
-        options=ClaudeAgentOptions(
-            model=model,
-            system_prompt=system_prompt,
-            allowed_tools=allowed_tools,
-            disallowed_tools=ecosystem.disallowed_tools,
-            mcp_servers=ecosystem.merged_mcp_servers,
-            permission_mode="acceptEdits",
-            hooks={
-                "PreToolUse": [
-                    HookMatcher(matcher="Bash", hooks=[bash_security_hook]),
-                ],
-            },
-            max_turns=1000,
-            cwd=str(project_dir.resolve()),
-        )
+    return create_client(
+        project_dir=project_dir,
+        model=model,
+        mode="greenfield",
+        ecosystem=ecosystem,
+        system_prompt_override=system_prompt,
+        session_type="architect",
+        max_turns=500,
     )
 
 

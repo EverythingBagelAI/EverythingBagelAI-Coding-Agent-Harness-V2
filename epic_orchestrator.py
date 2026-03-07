@@ -59,6 +59,8 @@ async def _run_coding_loop(
     iteration = 0
     epic_issues_resolved = 0
     issue_retry_counts: dict[str, int] = {}
+    no_issue_retry_count = 0
+    MAX_NO_ISSUE_RETRIES = 50
 
     while True:
         iteration += 1
@@ -102,11 +104,17 @@ async def _run_coding_loop(
                 return (epic_issues_resolved, False)
             else:
                 # Issues exist but none are eligible (all gates/snapshots?)
+                no_issue_retry_count += 1
+                if no_issue_retry_count > MAX_NO_ISSUE_RETRIES:
+                    print(f"\n  No eligible issues found after {MAX_NO_ISSUE_RETRIES} attempts.")
+                    print("  Check Linear for stuck issues or run with --verbose for details.")
+                    return (0, True)
                 print("  No eligible issues found but epic not complete. Retrying...")
                 await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
                 continue
 
         issue_id = current_issue["id"]
+        no_issue_retry_count = 0  # Reset when we find an eligible issue
         issue_retry_counts[issue_id] = issue_retry_counts.get(issue_id, 0) + 1
 
         if issue_retry_counts[issue_id] > MAX_ISSUE_RETRIES:
@@ -261,9 +269,6 @@ async def run_epic_mode(
             next_entry = get_epic_by_number(project_dir, next_epic)
             next_name = next_entry["name"] if next_entry else "unknown"
             _print_epic_completion(epic_number, epic_name, epic_issues_resolved, next_epic, next_name)
-
-    # --- Final summary ---
-    _print_final_completion(epics_completed, total_issues_resolved)
 
 
 def _print_human_gate_pause(gate_id: str, project_dir: Path) -> None:

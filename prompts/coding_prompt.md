@@ -15,7 +15,7 @@ You are a coding agent working on one issue at a time within an epic. You have a
    npm install -D @playwright/test 2>/dev/null || true
    npx playwright install chromium 2>/dev/null || true
    ```
-7. Run `init.sh` if it exists (`[ -f init.sh ] && bash init.sh`). Otherwise start the dev server with `npm run dev` or the appropriate start command for this project.
+7. Run `init.sh` if it exists (`[ -f ./init.sh ] && ./init.sh`). Otherwise start the dev server with `npm run dev` or the appropriate start command for this project.
 8. Install backend test dependencies (safe to run even if already installed):
    `pip install pytest httpx pytest-asyncio 2>/dev/null || true`
 9. Run the baseline Playwright test (see Testing section) to confirm the app is working before you touch anything
@@ -58,6 +58,8 @@ Use `ref_search_documentation` whenever you are:
 - Getting an unexpected error from a library call
 - Unsure of the correct method signature or configuration option
 - Working with authentication, database queries, or third-party services
+
+If `ref_search_documentation` is unavailable, proceed without it — use your training knowledge for library documentation or check the pre-fetched docs in the INJECTED CONTEXT section below.
 
 Query format: write a full sentence or question, not keywords. Good: "How do I configure Supabase row level security for authenticated users in Next.js". Bad: "supabase RLS".
 
@@ -134,6 +136,10 @@ When you reach a `[HUMAN GATE]` issue:
 - Never start a new issue while the previous one is uncommitted
 - Never create Linear issues — the harness manages these
 - Never declare the project or epic complete based on your own assessment — check Linear
+
+## V1 Mode Limitation
+
+Note: In greenfield/brownfield mode, `build_deviations.md` is not maintained automatically. If you want to track architectural deviations, maintain it manually or switch to epic mode.
 
 ## Clean State Rule
 

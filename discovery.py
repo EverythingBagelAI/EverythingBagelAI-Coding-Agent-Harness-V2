@@ -41,19 +41,8 @@ SESSION_MCP_SCOPES: dict[str, list[str] | None] = {
     "standard": None,
 }
 
-# Default bash commands always allowed for development
-DEFAULT_ALLOWED_COMMANDS: set[str] = {
-    "ls", "cat", "head", "tail", "wc", "grep",
-    "cp", "mkdir", "chmod",
-    "find", "echo", "touch", "mv", "rm", "sed", "awk",
-    "pwd",
-    "npm", "node", "npx",
-    "python3", "python", "pytest", "pip", "pip3", "export",
-    "git",
-    "ps", "lsof", "sleep", "pkill",
-    "curl", "wget", "unzip", "tar",
-    "init.sh",
-}
+# Single source of truth for allowed commands is security.py
+from security import _DEFAULT_ALLOWED_COMMANDS as DEFAULT_ALLOWED_COMMANDS
 
 # Known safe plugins/skills/frameworks — never flagged as conflicts
 KNOWN_SAFE_NAMES: set[str] = {
@@ -658,13 +647,7 @@ def discover_user_ecosystem(
     global_servers, project_servers, found, missing = load_user_mcp_servers(project_dir)
 
     # Build harness-required servers
-    harness_servers: list[McpServerEntry] = [
-        McpServerEntry(
-            name="puppeteer",
-            config={"command": "npx", "args": ["puppeteer-mcp-server"]},
-            source="harness",
-        ),
-    ]
+    harness_servers: list[McpServerEntry] = []
 
     if linear_api_key:
         harness_servers.append(McpServerEntry(
