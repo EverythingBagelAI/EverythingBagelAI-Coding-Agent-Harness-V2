@@ -32,6 +32,7 @@ def create_client(
     model: str,
     mode: str = "greenfield",
     ecosystem: Optional[EcosystemInfo] = None,
+    system_prompt_override: Optional[str] = None,
 ) -> ClaudeSDKClient:
     """
     Create a Claude Agent SDK client with dynamic configuration.
@@ -44,6 +45,7 @@ def create_client(
         model: Claude model to use
         mode: "greenfield" or "brownfield"
         ecosystem: Pre-discovered ecosystem (runs discovery if None)
+        system_prompt_override: If provided, use this instead of the dynamic system prompt
     Returns:
         Configured ClaudeSDKClient
 
@@ -70,8 +72,8 @@ def create_client(
     for server_name in ecosystem.merged_mcp_servers:
         allowed_tools.append(f"mcp__{server_name}__*")
 
-    # Build dynamic system prompt
-    system_prompt = build_dynamic_system_prompt(ecosystem, mode)
+    # Build dynamic system prompt (or use override)
+    system_prompt = system_prompt_override or build_dynamic_system_prompt(ecosystem, mode)
 
     # Print client configuration summary
     print("Client Configuration:")

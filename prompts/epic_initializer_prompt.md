@@ -43,4 +43,14 @@ Create issues in this order:
 
 ## After Creating Issues
 
-Write a brief summary to the terminal: how many issues created, what the first issue is, and (if applicable) what the human gate requires.
+1. Write `.linear_project.json` to the project root with this structure:
+```json
+{
+  "projectId": "[the Linear project ID just created]",
+  "epicNumber": [N],
+  "epicName": "[name]"
+}
+```
+The orchestrator reads this file immediately after the session exits.
+
+2. Write a brief summary to the terminal: how many issues created, what the first issue is, and (if applicable) what the human gate requires.

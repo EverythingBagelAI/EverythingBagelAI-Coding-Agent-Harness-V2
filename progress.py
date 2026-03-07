@@ -4,6 +4,7 @@ Progress Tracking Utilities
 
 Functions for tracking and displaying progress of the autonomous coding agent.
 Progress is tracked via Linear issues, with local state cached in .linear_project.json.
+Epic state is persisted in claude-progress.txt alongside existing session state.
 """
 
 import json
@@ -13,6 +14,17 @@ from pathlib import Path
 
 from linear_config import LINEAR_PROJECT_MARKER
 
+
+# ---------------------------------------------------------------------------
+# Epic state constants
+# ---------------------------------------------------------------------------
+EPIC_STATE_START = "=== EPIC STATE ==="
+EPIC_STATE_END = "=== END EPIC STATE ==="
+
+
+# ---------------------------------------------------------------------------
+# Existing functions (unchanged)
+# ---------------------------------------------------------------------------
 
 def load_linear_project_state(project_dir: Path) -> dict | None:
     """
@@ -160,3 +172,189 @@ def is_project_complete(project_dir: Path) -> bool:
     except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError):
         # API failed — fall back to local flag
         return state.get("app_complete", False) is True
+
+
+# ---------------------------------------------------------------------------
+# Epic state: read/write from claude-progress.txt
+# ---------------------------------------------------------------------------
+
+def _progress_file(project_dir: Path) -> Path:
+    return project_dir / "claude-progress.txt"
+
+
+def _read_epic_state(project_dir: Path) -> dict:
+    """Read the epic state section from claude-progress.txt, or return defaults."""
+    defaults = {
+        "current_epic": None,
+        "current_epic_name": None,
+        "linear_project_id": None,
+        "epic_status": {},
+        "human_gate_issue_id": None,
+    }
+
+    pf = _progress_file(project_dir)
+    if not pf.exists():
+        return defaults
+
+    content = pf.read_text()
+    if EPIC_STATE_START not in content:
+        return defaults
+
+    # Extract the section between markers
+    start = content.index(EPIC_STATE_START) + len(EPIC_STATE_START)
+    end = content.index(EPIC_STATE_END) if EPIC_STATE_END in content else len(content)
+    section = content[start:end].strip()
+
+    state = dict(defaults)
+    for line in section.splitlines():
+        line = line.strip()
+        if not line or ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+
+        if key == "current_epic":
+            state["current_epic"] = int(value) if value != "null" else None
+        elif key == "current_epic_name":
+            state["current_epic_name"] = value if value != "null" else None
+        elif key == "linear_project_id":
+            state["linear_project_id"] = value if value != "null" else None
+        elif key == "epic_status":
+            state["epic_status"] = json.loads(value) if value != "{}" else {}
+        elif key == "human_gate_issue_id":
+            state["human_gate_issue_id"] = value if value != "null" else None
+
+    return state
+
+
+def _write_epic_state(project_dir: Path, state: dict) -> None:
+    """Write the epic state section into claude-progress.txt."""
+    pf = _progress_file(project_dir)
+
+    # Build the epic state block
+    block_lines = [
+        EPIC_STATE_START,
+        f"current_epic: {state['current_epic'] if state['current_epic'] is not None else 'null'}",
+        f"current_epic_name: {state['current_epic_name'] if state['current_epic_name'] is not None else 'null'}",
+        f"linear_project_id: {state['linear_project_id'] if state['linear_project_id'] is not None else 'null'}",
+        f"epic_status: {json.dumps(state['epic_status'])}",
+        f"human_gate_issue_id: {state['human_gate_issue_id'] if state['human_gate_issue_id'] is not None else 'null'}",
+        EPIC_STATE_END,
+    ]
+    block = "\n".join(block_lines)
+
+    if pf.exists():
+        content = pf.read_text()
+        if EPIC_STATE_START in content:
+            # Replace existing section
+            start = content.index(EPIC_STATE_START)
+            end_marker = EPIC_STATE_END
+            if end_marker in content:
+                end = content.index(end_marker) + len(end_marker)
+            else:
+                end = len(content)
+            content = content[:start] + block + content[end:]
+        else:
+            # Append the section
+            content = content.rstrip() + "\n\n" + block + "\n"
+    else:
+        content = block + "\n"
+
+    pf.write_text(content)
+
+
+# ---------------------------------------------------------------------------
+# Epic state: public API
+# ---------------------------------------------------------------------------
+
+def set_current_epic(project_dir: Path, epic_number: int, epic_name: str) -> None:
+    """Mark an epic as in_progress and update current epic state."""
+    state = _read_epic_state(project_dir)
+    state["current_epic"] = epic_number
+    state["current_epic_name"] = epic_name
+    state["epic_status"][str(epic_number)] = "in_progress"
+    _write_epic_state(project_dir, state)
+
+
+def mark_epic_complete(project_dir: Path, epic_number: int) -> None:
+    """Mark an epic complete and clear current_epic_number."""
+    state = _read_epic_state(project_dir)
+    state["epic_status"][str(epic_number)] = "complete"
+    state["current_epic"] = None
+    state["current_epic_name"] = None
+    state["linear_project_id"] = None
+    _write_epic_state(project_dir, state)
+
+
+def set_human_gate(project_dir: Path, issue_id: str) -> None:
+    """Record the human gate issue ID — harness will poll this."""
+    state = _read_epic_state(project_dir)
+    state["human_gate_issue_id"] = issue_id
+    _write_epic_state(project_dir, state)
+
+
+def clear_human_gate(project_dir: Path) -> None:
+    """Clear the human gate once resolved."""
+    state = _read_epic_state(project_dir)
+    state["human_gate_issue_id"] = None
+    _write_epic_state(project_dir, state)
+
+
+def set_linear_project_id(project_dir: Path, project_id: str) -> None:
+    """Store the Linear project ID for the current epic."""
+    state = _read_epic_state(project_dir)
+    state["linear_project_id"] = project_id
+    _write_epic_state(project_dir, state)
+
+
+def get_linear_project_id(project_dir: Path) -> str | None:
+    """Retrieve the stored Linear project ID for the current epic."""
+    state = _read_epic_state(project_dir)
+    return state["linear_project_id"]
+
+
+def get_human_gate_issue_id(project_dir: Path) -> str | None:
+    """Retrieve the stored human gate issue ID."""
+    state = _read_epic_state(project_dir)
+    return state["human_gate_issue_id"]
+
+
+def get_next_pending_epic(project_dir: Path) -> int | None:
+    """Return the number of the next epic with status 'pending', or None if all complete."""
+    state = _read_epic_state(project_dir)
+    index = load_epic_index(project_dir)
+
+    for epic in index:
+        num = str(epic["number"])
+        status = state["epic_status"].get(num, "pending")
+        if status == "pending":
+            return epic["number"]
+
+    return None
+
+
+def load_epic_index(project_dir: Path) -> list[dict]:
+    """
+    Read epics/spec_index.json and return the list of epic entries.
+
+    Each entry: {"number": 1, "name": "foundation", "spec_file": "epics/epic-01-foundation.md", ...}
+    """
+    index_path = project_dir / "epics" / "spec_index.json"
+    if not index_path.exists():
+        raise FileNotFoundError(
+            f"Epic index not found at {index_path}. "
+            "Run generate_epics.py first to create the epic specs."
+        )
+
+    with open(index_path) as f:
+        return json.load(f)
+
+
+def get_epic_by_number(project_dir: Path, epic_number: int) -> dict | None:
+    """Look up an epic entry by number from the index."""
+    index = load_epic_index(project_dir)
+    for epic in index:
+        if epic["number"] == epic_number:
+            return epic
+    return None

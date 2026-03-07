@@ -10,8 +10,13 @@ You are a coding agent working on one issue at a time within an epic. You have a
 4. Read `build_deviations.md` if it exists — understand what changed from the original plan
 5. Read `shared_context.md` — understand the cross-epic architectural decisions
 6. Check Linear for the highest-priority incomplete issue in this epic that is not the Human Gate or Snapshot issue
-7. Run `init.sh` to start the dev server
-8. Run the baseline Playwright test (see Testing section) to confirm the app is working before you touch anything
+7. For every epic's Setup issue, ensure Playwright is installed (idempotent — safe to re-run):
+   ```bash
+   npm install -D @playwright/test 2>/dev/null || true
+   npx playwright install chromium 2>/dev/null || true
+   ```
+8. Run `init.sh` to start the dev server
+9. Run the baseline Playwright test (see Testing section) to confirm the app is working before you touch anything
 
 If the app is broken when you start, fix the breakage before implementing anything new. Commit the fix separately.
 

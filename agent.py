@@ -3,9 +3,11 @@ Agent Session Logic
 ===================
 
 Core agent interaction functions for running autonomous coding sessions.
+Supports standard mode (greenfield/brownfield) and epic mode.
 """
 
 import asyncio
+import json
 import os
 from pathlib import Path
 from typing import Optional
@@ -14,13 +16,33 @@ from claude_agent_sdk import ClaudeSDKClient
 
 from client import create_client
 from discovery import EcosystemInfo, discover_user_ecosystem, print_discovery_summary
-from progress import print_session_header, print_progress_summary, is_linear_initialized, is_project_complete
-from prompts import get_initializer_prompt, get_coding_prompt, get_brownfield_initializer_prompt, copy_spec_to_project
+from progress import (
+    print_session_header,
+    print_progress_summary,
+    is_linear_initialized,
+    is_project_complete,
+    set_current_epic,
+    set_linear_project_id,
+)
+from prompts import (
+    get_initializer_prompt,
+    get_coding_prompt,
+    get_brownfield_initializer_prompt,
+    get_epic_initializer_prompt,
+    build_epic_initializer_context,
+    copy_spec_to_project,
+)
 from security import configure_allowed_commands
 
 
 # Configuration
 AUTO_CONTINUE_DELAY_SECONDS = 3
+
+# Session types
+SESSION_INITIALIZER = "initializer"
+SESSION_BROWNFIELD_INITIALIZER = "brownfield_initializer"
+SESSION_EPIC_INITIALIZER = "epic_initializer"
+SESSION_CODING_AGENT = "coding_agent"
 
 
 async def run_agent_session(
@@ -120,6 +142,81 @@ def _log_session_cost(result_msg) -> None:
         print(f"\n  Session stats: {' | '.join(parts)}")
 
 
+async def run_epic_initializer_session(
+    project_dir: Path,
+    model: str,
+    epic_number: int,
+    epic_name: str,
+    ecosystem: EcosystemInfo,
+) -> str | None:
+    """
+    Run the Epic Initializer session for a single epic.
+
+    Creates Linear issues from the epic spec. After completion, reads
+    .linear_project.json to get the project ID.
+
+    Args:
+        project_dir: Project directory
+        model: Claude model to use
+        epic_number: Which epic to initialise
+        epic_name: Human-readable epic name
+        ecosystem: Pre-discovered ecosystem
+
+    Returns:
+        The Linear project ID created, or None on error.
+    """
+    print("\n" + "=" * 70)
+    print(f"  EPIC INITIALIZER — Epic {epic_number}: {epic_name}")
+    print("=" * 70 + "\n")
+
+    # Build context from files
+    context = build_epic_initializer_context(epic_number, project_dir)
+
+    # Load the epic initializer system prompt
+    system_prompt_text = get_epic_initializer_prompt()
+
+    # Create the client — uses the epic initializer prompt as system prompt
+    client = create_client(
+        project_dir,
+        model,
+        mode="greenfield",
+        ecosystem=ecosystem,
+        system_prompt_override=system_prompt_text,
+    )
+
+    # The user message contains the full injected context
+    user_message = (
+        f"Initialise Epic {epic_number}: {epic_name}\n\n"
+        f"{context}\n\n"
+        "Create the Linear project and issues as described in your system prompt. "
+        "Write .linear_project.json when done."
+    )
+
+    async with client:
+        status, response = await run_agent_session(client, user_message, project_dir)
+
+    if status == "error":
+        print(f"Epic Initializer failed: {response}")
+        return None
+
+    # Read the project ID written by the agent
+    marker_path = project_dir / ".linear_project.json"
+    if marker_path.exists():
+        try:
+            data = json.loads(marker_path.read_text())
+            project_id = data.get("projectId")
+            if project_id:
+                set_linear_project_id(project_dir, project_id)
+                set_current_epic(project_dir, epic_number, epic_name)
+                print(f"  Linear project ID: {project_id}")
+                return project_id
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"  Warning: Could not read .linear_project.json: {e}")
+
+    print("  Warning: Epic Initializer did not write .linear_project.json")
+    return None
+
+
 async def run_autonomous_agent(
     project_dir: Path,
     model: str,
@@ -127,7 +224,7 @@ async def run_autonomous_agent(
     mode: str = "greenfield",
 ) -> None:
     """
-    Run the autonomous agent loop.
+    Run the autonomous agent loop (standard mode).
 
     Args:
         project_dir: Directory for the project

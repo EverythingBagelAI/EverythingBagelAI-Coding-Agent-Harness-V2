@@ -7,7 +7,7 @@ A dynamic harness for long-running autonomous coding with Claude.
 Implements the two-agent pattern (initialiser + coding agent) with
 dynamic ecosystem discovery for any user's Claude Code setup.
 
-Supports both greenfield (new project) and brownfield (existing codebase) modes.
+Supports greenfield, brownfield, and epic modes.
 
 Example Usage:
     # Greenfield (default) - new project from app_spec.txt
@@ -15,6 +15,9 @@ Example Usage:
 
     # Brownfield - work on an existing codebase
     python autonomous_agent_demo.py --mode brownfield --existing-dir /path/to/repo
+
+    # Epic - multi-epic orchestration from generated specs
+    python autonomous_agent_demo.py --project-dir ./my-project --mode epic
 
     # With iteration limit and cost cap
     python autonomous_agent_demo.py --project-dir ./demo --max-iterations 5 --max-budget 10.0
@@ -53,6 +56,9 @@ Examples:
   # Brownfield - work on existing codebase
   python autonomous_agent_demo.py --mode brownfield --existing-dir /path/to/repo
 
+  # Epic - multi-epic orchestration
+  python autonomous_agent_demo.py --project-dir ./my-project --mode epic
+
   # With per-session cost cap
   python autonomous_agent_demo.py --project-dir ./demo --max-budget 10.0
 
@@ -75,9 +81,9 @@ Environment Variables:
     parser.add_argument(
         "--mode",
         type=str,
-        choices=["greenfield", "brownfield"],
+        choices=["greenfield", "brownfield", "epic"],
         default="greenfield",
-        help="Development mode: greenfield (new project) or brownfield (existing codebase). Default: greenfield.",
+        help="Development mode: greenfield (new project), brownfield (existing codebase), or epic (multi-epic orchestration). Default: greenfield.",
     )
 
     parser.add_argument(
@@ -145,6 +151,16 @@ def main() -> None:
             print(f"Warning: '{project_dir}' doesn't look like a project directory")
             print(f"  (no {', '.join(indicators)} found)")
             print("  Continuing anyway...\n")
+
+    elif mode == "epic":
+        # Epic mode uses --project-dir as the target project directory
+        project_dir = args.project_dir
+        if not str(project_dir).startswith("generations/"):
+            if project_dir.is_absolute():
+                pass
+            else:
+                project_dir = Path("generations") / project_dir
+
     else:
         # Greenfield: existing behaviour — place in generations/
         project_dir = args.project_dir
@@ -156,14 +172,22 @@ def main() -> None:
 
     # Run the agent
     try:
-        asyncio.run(
-            run_autonomous_agent(
+        if mode == "epic":
+            from epic_orchestrator import run_epic_mode
+            asyncio.run(run_epic_mode(
                 project_dir=project_dir,
                 model=args.model,
                 max_iterations=args.max_iterations,
-                mode=mode,
+            ))
+        else:
+            asyncio.run(
+                run_autonomous_agent(
+                    project_dir=project_dir,
+                    model=args.model,
+                    max_iterations=args.max_iterations,
+                    mode=mode,
+                )
             )
-        )
     except KeyboardInterrupt:
         print("\n\nInterrupted by user")
         print("To resume, run the same command again")

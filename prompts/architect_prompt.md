@@ -26,9 +26,32 @@ A dependency-ordered list of all epics. Format:
 [3-5 bullet points covering colours, fonts, component library, spacing conventions]
 ```
 
-### epics/shared_context.md
+### epics/spec_index.json
 
-The cross-epic context that every Epic Initializer will read. Keep this under 400 words. Include:
+A machine-readable version of the spec index. This JSON file is the source of truth for the orchestrator. It must match the execution order in spec_index.md exactly:
+
+```json
+[
+  {
+    "number": 1,
+    "name": "foundation",
+    "spec_file": "epics/epic-01-foundation.md",
+    "depends_on": [],
+    "blocks": [2, 3]
+  },
+  {
+    "number": 2,
+    "name": "auth",
+    "spec_file": "epics/epic-02-auth.md",
+    "depends_on": [1],
+    "blocks": [3]
+  }
+]
+```
+
+### shared_context.md (PROJECT ROOT — not epics/)
+
+The cross-epic context that every Epic Initializer will read. This file lives at the project root (alongside application code), not inside epics/. Keep this under 400 words. Include:
 
 - Core data model (key entities and their relationships, 1 line each)
 - Primary API contracts (key endpoints, 1 line each)
