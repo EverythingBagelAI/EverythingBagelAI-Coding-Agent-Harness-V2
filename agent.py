@@ -20,7 +20,7 @@ from progress import (
     print_session_header,
     print_progress_summary,
     is_linear_initialized,
-    is_project_complete,
+    load_linear_project_state,
     set_current_epic,
     set_linear_project_id,
 )
@@ -205,7 +205,7 @@ async def run_epic_initializer_session(
     if marker_path.exists():
         try:
             data = json.loads(marker_path.read_text())
-            project_id = data.get("projectId")
+            project_id = data.get("project_id")
             if project_id:
                 set_linear_project_id(project_dir, project_id)
                 set_current_epic(project_dir, epic_number, epic_name)
@@ -325,8 +325,17 @@ async def run_autonomous_agent(
         async with client:
             status, response = await run_agent_session(client, prompt, project_dir)
 
-        # Check if project is complete after each session
-        if is_project_complete(project_dir):
+        # Check if project is complete via Linear API
+        _state = load_linear_project_state(project_dir)
+        _project_id = _state.get("project_id") if _state else None
+        _complete = False
+        if _project_id:
+            try:
+                from linear_client import get_all_issues_complete
+                _complete = get_all_issues_complete(_project_id)
+            except Exception:
+                _complete = (_state or {}).get("app_complete", False) is True
+        if _complete:
             print("\n" + "=" * 70)
             print("  PROJECT COMPLETE")
             print("=" * 70)

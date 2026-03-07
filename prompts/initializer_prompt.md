@@ -151,6 +151,22 @@ Base the script on the technology stack specified in `app_spec.txt`.
 
 ### NEXT TASK: Initialize Git
 
+Before running git add, create a .gitignore file if one doesn't exist containing:
+
+```
+.env
+.env.*
+.env.local
+node_modules/
+.linear_project.json
+claude-progress.txt
+.harness.lock
+__pycache__/
+*.pyc
+.next/
+dist/
+```
+
 Create a git repository and make your first commit with:
 
 - init.sh (environment setup script)

@@ -72,6 +72,7 @@ async def run_epic_mode(
     skills_dst = project_dir / ".claude" / "skills"
     if skills_src.exists() and not skills_dst.exists():
         shutil.copytree(skills_src, skills_dst)
+        # Copies all skills (e2e-test, api-test, etc.) into the project
         print(f"  Copied skill files to {skills_dst}")
 
     # --- Dynamic Ecosystem Discovery ---

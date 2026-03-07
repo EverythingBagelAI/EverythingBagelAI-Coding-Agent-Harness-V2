@@ -4,11 +4,14 @@ Used by the Python orchestrator for state queries — NOT by the agent.
 The agent continues to use the Linear MCP for issue management.
 """
 
+import logging
 import os
 import time
 from typing import Optional
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 LINEAR_API_URL = "https://api.linear.app/graphql"
 
@@ -81,7 +84,11 @@ def get_current_issue(project_id: str) -> Optional[dict]:
     }
     """
     data = _query(query, {"projectId": project_id})
-    issues = data["project"]["issues"]["nodes"]
+    project = data.get("project")
+    if not project:
+        logger.warning("Project %s returned None from Linear API", project_id)
+        return None
+    issues = project.get("issues", {}).get("nodes", [])
     for issue in issues:
         title = issue["title"]
         if title.startswith("[HUMAN GATE]") or title.startswith("[SNAPSHOT]"):
@@ -114,7 +121,11 @@ def get_human_gate_issue(project_id: str) -> Optional[dict]:
     }
     """
     data = _query(query, {"projectId": project_id})
-    issues = data["project"]["issues"]["nodes"]
+    project = data.get("project")
+    if not project:
+        logger.warning("Project %s returned None from Linear API", project_id)
+        return None
+    issues = project.get("issues", {}).get("nodes", [])
     return issues[-1] if issues else None
 
 
@@ -176,7 +187,11 @@ def get_all_issues_complete(project_id: str) -> bool:
     }
     """
     data = _query(query, {"projectId": project_id})
-    issues = data["project"]["issues"]["nodes"]
+    project = data.get("project")
+    if not project:
+        logger.warning("Project %s returned None from Linear API", project_id)
+        return False
+    issues = project.get("issues", {}).get("nodes", [])
     for issue in issues:
         title = issue["title"]
         if title.startswith("[HUMAN GATE]") or title.startswith("[SNAPSHOT]"):

@@ -103,7 +103,7 @@ def create_client(
                     HookMatcher(matcher="Bash", hooks=[bash_security_hook]),
                 ],
             },
-            max_turns=1000,
+            max_turns=200,
             cwd=str(project_dir.resolve()),
         )
     )

@@ -49,6 +49,10 @@ A machine-readable version of the spec index. This JSON file is the source of tr
 ]
 ```
 
+IMPORTANT: This JSON is machine-parsed by the harness. The keys `number`, `name`,
+and `spec_file` are REQUIRED and must use exactly these names — no aliases, no
+camelCase variants. Any deviation will cause the harness to crash on startup.
+
 ### shared_context.md (PROJECT ROOT — not epics/)
 
 The cross-epic context that every Epic Initializer will read. This file lives at the project root (alongside application code), not inside epics/. Keep this under 400 words. Include:

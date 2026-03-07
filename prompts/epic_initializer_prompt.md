@@ -13,6 +13,8 @@ Before creating any Linear issues, read these files:
 
 ## Linear Structure
 
+Before creating a new Linear project, search for an existing project whose name matches the spec name. If found, retrieve its ID and reuse it — do not create a duplicate. Write the found projectId to .linear_project.json as normal.
+
 Create a single Linear project named: `[Project Name] — Epic N: [Epic Name]`
 
 Create issues in this order:
@@ -105,15 +107,33 @@ labelNames: ["human-gate", "blocked"]
 - Do not reference files or functions that don't exist yet in earlier issues
 - Do not create the human gate issue for the final epic
 
+## Pre-Commit Setup
+
+Before any git add or commit, create a .gitignore file at the project root if one doesn't exist:
+
+```
+.env
+.env.*
+.env.local
+node_modules/
+.linear_project.json
+claude-progress.txt
+.harness.lock
+__pycache__/
+*.pyc
+.next/
+dist/
+```
+
 ## After Creating Issues
 
 1. Write `.linear_project.json` to the project root with this structure:
 
 ```json
 {
-  "projectId": "[the Linear project ID just created]",
-  "epicNumber": [N],
-  "epicName": "[name]"
+  "project_id": "[the Linear project ID just created]",
+  "epic_number": [N],
+  "epic_name": "[name]"
 }
 ```
 

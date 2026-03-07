@@ -7,6 +7,7 @@ Progress is tracked via Linear issues, with local state cached in .linear_projec
 Epic state is persisted in claude-progress.txt alongside existing session state.
 """
 
+import fcntl
 import json
 import logging
 import os
@@ -16,6 +17,24 @@ from pathlib import Path
 from linear_config import LINEAR_PROJECT_MARKER
 
 logger = logging.getLogger(__name__)
+
+
+def acquire_harness_lock(project_dir: Path) -> object:
+    """
+    Acquire an exclusive lock for the harness on this project directory.
+    Prevents concurrent harness runs from corrupting state.
+    Returns the lock file descriptor (keep a reference to prevent GC).
+    """
+    lock_path = project_dir / ".harness.lock"
+    fd = open(lock_path, "w")
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        fd.close()
+        print(f"\n  Another harness instance is running for {project_dir}.")
+        print("  Wait for it to finish or delete .harness.lock if it crashed.\n")
+        raise SystemExit(1)
+    return fd
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +290,9 @@ def _write_epic_state(project_dir: Path, state: dict) -> None:
     else:
         content = block + "\n"
 
-    pf.write_text(content)
+    tmp = pf.with_suffix(".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, pf)
 
 
 # ---------------------------------------------------------------------------
@@ -353,12 +374,27 @@ def load_epic_index(project_dir: Path) -> list[dict]:
     index_path = project_dir / "epics" / "spec_index.json"
     if not index_path.exists():
         raise FileNotFoundError(
-            f"Epic index not found at {index_path}. "
+            f"spec_index.json not found at {index_path}. "
             "Run generate_epics.py first to create the epic specs."
         )
 
-    with open(index_path) as f:
-        return json.load(f)
+    try:
+        with open(index_path) as f:
+            data = json.load(f)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"spec_index.json is malformed: {e}") from e
+
+    if not isinstance(data, list):
+        raise ValueError(f"spec_index.json must be a JSON array, got {type(data)}")
+
+    required_keys = {"number", "name", "spec_file"}
+    for i, item in enumerate(data):
+        missing = required_keys - set(item.keys())
+        if missing:
+            raise ValueError(
+                f"spec_index.json entry {i} is missing required keys: {missing}"
+            )
+    return data
 
 
 def get_epic_by_number(project_dir: Path, epic_number: int) -> dict | None:

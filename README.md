@@ -30,7 +30,7 @@ claude --version   # latest Claude Code CLI
 Environment variables required:
 
 ```bash
-export ANTHROPIC_API_KEY='sk-ant-...'
+export CLAUDE_CODE_OAUTH_TOKEN='your-oauth-token'
 export LINEAR_API_KEY='lin_api_...'        # linear.app → Settings → API
 ```
 
@@ -206,10 +206,10 @@ my-project/
 
 ## Troubleshooting
 
-**`ANTHROPIC_API_KEY not set`**
+**`CLAUDE_CODE_OAUTH_TOKEN not set`**
 
 ```bash
-export ANTHROPIC_API_KEY='sk-ant-...'
+export CLAUDE_CODE_OAUTH_TOKEN='your-oauth-token'
 ```
 
 **`LINEAR_API_KEY not set`**

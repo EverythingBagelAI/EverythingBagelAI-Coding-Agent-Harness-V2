@@ -8,14 +8,15 @@ You are a coding agent working on one issue at a time within an epic. You have a
 2. Read `claude-progress.txt` for recent session history
 3. Run `git log --oneline -10` to see recent commits
 4. Read `build_deviations.md` if it exists — understand what changed from the original plan
-5. Read `shared_context.md` — understand the cross-epic architectural decisions
-6. Check Linear for the highest-priority incomplete issue in this epic that is not the Human Gate or Snapshot issue
-7. For every epic's Setup issue, ensure Playwright is installed (idempotent — safe to re-run):
+5. In epic mode, shared_context.md and your current Linear issue have been pre-injected below by the harness — skip reading them manually. In standard mode, read shared_context.md if it exists and check Linear for the highest-priority incomplete issue.
+6. For every epic's Setup issue, ensure Playwright is installed (idempotent — safe to re-run):
    ```bash
    npm install -D @playwright/test 2>/dev/null || true
    npx playwright install chromium 2>/dev/null || true
    ```
-8. Run `init.sh` to start the dev server
+7. Run `init.sh` if it exists (`[ -f init.sh ] && bash init.sh`). Otherwise start the dev server with `npm run dev` or the appropriate start command for this project.
+8. Install backend test dependencies (safe to run even if already installed):
+   `pip install pytest httpx pytest-asyncio 2>/dev/null || true`
 9. Run the baseline Playwright test (see Testing section) to confirm the app is working before you touch anything
 
 If the app is broken when you start, fix the breakage before implementing anything new. Commit the fix separately.
@@ -35,6 +36,18 @@ For each issue:
 5. **Update Linear** — mark the issue Done. Add a comment with: what was implemented, any decisions made, any deviation from the issue description.
 
 6. **Move to next issue** — do not start a new issue until the current one is committed and marked Done.
+
+## Session Completion
+
+In epic mode, you work on exactly ONE issue per session. Your session ends when:
+
+1. You have implemented the issue completely
+2. All required tests pass (Playwright for UI, API tests for backend, both for full-stack)
+3. You have committed the changes with a descriptive message
+4. You have marked the Linear issue as Done
+
+After marking Done, STOP. Do not pick up the next issue. The harness will start a
+new session with a fresh context window for the next issue.
 
 ## Ref Documentation Usage
 
@@ -57,6 +70,25 @@ Key rules:
 - Tests live in `e2e/` at the project root
 - Run tests with `npx playwright test`
 - If a test fails due to a genuine app bug, fix the app. If a test is wrong, fix the test. Never skip or comment out a failing test.
+
+## Backend / API Testing
+
+Use the skill at `.claude/skills/api-test/SKILL.md` for all backend testing.
+
+**Rules:**
+
+- Any issue that creates or modifies an API route, database operation, auth guard,
+  webhook handler, or background job MUST have passing API tests before being marked Done
+- Tests live in `api_tests/` (Python) or `api-tests/` (TypeScript) at the project root
+- Run: `pytest api_tests/ -v` (Python) or `npx vitest run api-tests/` (TypeScript)
+- Never skip or comment out a failing test
+- Every API endpoint needs at minimum: (1) happy path test, (2) one error case test
+
+**When to use which:**
+
+- Backend-only issue: API tests only
+- Frontend-only issue: Playwright only
+- Full-stack issue: both
 
 ## The Snapshot Issue
 
@@ -95,7 +127,8 @@ When you reach a `[HUMAN GATE]` issue:
 
 - Never use mock data or stub implementations that aren't marked with a TODO
 - Never suppress TypeScript errors with `any` or `@ts-ignore`
-- Never mark an issue Done without running tests
+- Never mark an issue Done without running the appropriate tests:
+  Playwright for UI issues, API tests for backend issues, both for full-stack issues
 - Never batch multiple issues into one commit
 - Never start a new issue while the previous one is uncommitted
 - Never create Linear issues — the harness manages these

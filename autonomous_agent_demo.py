@@ -19,8 +19,8 @@ Example Usage:
     # Epic - multi-epic orchestration from generated specs
     python autonomous_agent_demo.py --project-dir ./my-project --mode epic
 
-    # With iteration limit and cost cap
-    python autonomous_agent_demo.py --project-dir ./demo --max-iterations 5 --max-budget 10.0
+    # With iteration limit
+    python autonomous_agent_demo.py --project-dir ./demo --max-iterations 5
 """
 
 import argparse
@@ -58,9 +58,6 @@ Examples:
 
   # Epic - multi-epic orchestration
   python autonomous_agent_demo.py --project-dir ./my-project --mode epic
-
-  # With per-session cost cap
-  python autonomous_agent_demo.py --project-dir ./demo --max-budget 10.0
 
   # Continue existing project
   python autonomous_agent_demo.py --project-dir ./claude_clone

@@ -362,6 +362,15 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
     if not command:
         return {}
 
+    # Block subshell syntax that could bypass the allowlist
+    SUBSHELL_PATTERNS = ["`", "$(", "<("]
+    for pattern in SUBSHELL_PATTERNS:
+        if pattern in command:
+            return {
+                "decision": "block",
+                "reason": f"Subshell syntax '{pattern}' is not allowed",
+            }
+
     # Extract all commands from the command string
     commands = extract_commands(command)
 
@@ -383,28 +392,27 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
                 "reason": f"Command '{cmd}' is not in the allowed commands list",
             }
 
-        # Additional validation for sensitive commands
-        if cmd in COMMANDS_NEEDING_EXTRA_VALIDATION:
-            # Find the specific segment containing this command
-            cmd_segment = get_command_for_validation(cmd, segments)
-            if not cmd_segment:
-                cmd_segment = command  # Fallback to full command
-
-            if cmd == "pkill":
-                allowed, reason = validate_pkill_command(cmd_segment)
-                if not allowed:
-                    return {"decision": "block", "reason": reason}
-            elif cmd == "chmod":
-                allowed, reason = validate_chmod_command(cmd_segment)
-                if not allowed:
-                    return {"decision": "block", "reason": reason}
-            elif cmd == "init.sh":
-                allowed, reason = validate_init_script(cmd_segment)
-                if not allowed:
-                    return {"decision": "block", "reason": reason}
-            elif cmd == "rm":
-                allowed, reason = validate_rm_command(cmd_segment)
-                if not allowed:
-                    return {"decision": "block", "reason": reason}
+    # Additional validation for sensitive commands — check ALL pipe segments
+    pipe_segments = [s.strip() for s in command.split("|")]
+    for segment in pipe_segments:
+        segment_cmds = extract_commands(segment)
+        for cmd in segment_cmds:
+            if cmd in COMMANDS_NEEDING_EXTRA_VALIDATION:
+                if cmd == "pkill":
+                    allowed, reason = validate_pkill_command(segment)
+                    if not allowed:
+                        return {"decision": "block", "reason": reason}
+                elif cmd == "chmod":
+                    allowed, reason = validate_chmod_command(segment)
+                    if not allowed:
+                        return {"decision": "block", "reason": reason}
+                elif cmd == "init.sh":
+                    allowed, reason = validate_init_script(segment)
+                    if not allowed:
+                        return {"decision": "block", "reason": reason}
+                elif cmd == "rm":
+                    allowed, reason = validate_rm_command(segment)
+                    if not allowed:
+                        return {"decision": "block", "reason": reason}
 
     return {}
