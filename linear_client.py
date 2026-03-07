@@ -14,19 +14,20 @@ import httpx
 logger = logging.getLogger(__name__)
 
 LINEAR_API_URL = "https://api.linear.app/graphql"
+MAX_RETRIES = 3
 
 
 def _headers() -> dict:
+    """Return authorisation headers for the Linear GraphQL API."""
     api_key = os.environ.get("LINEAR_API_KEY")
     if not api_key:
         raise EnvironmentError("LINEAR_API_KEY not set")
     return {"Authorization": api_key, "Content-Type": "application/json"}
 
 
-MAX_RETRIES = 3
-
-
 def _query(query: str, variables: dict | None = None) -> dict:
+    """Execute a GraphQL query against the Linear API with retry and backoff."""
+    logger.debug("Linear API query: %.100s", query.strip())
     headers = _headers()
     last_response = None
     for attempt in range(MAX_RETRIES):
@@ -46,11 +47,22 @@ def _query(query: str, variables: dict | None = None) -> dict:
             print(f"  Linear server error ({response.status_code}). Retrying in {2 ** attempt}s...")
             time.sleep(2 ** attempt)
             continue
+        if response.status_code >= 400:
+            logger.error(
+                "Linear API error %s: %s",
+                response.status_code,
+                response.text[:200],
+            )
         response.raise_for_status()
         data = response.json()
         if "errors" in data:
             raise RuntimeError(f"Linear API error: {data['errors']}")
         return data["data"]
+    logger.error(
+        "Linear API retries exhausted, last status %s: %s",
+        last_response.status_code,
+        last_response.text[:200],
+    )
     last_response.raise_for_status()
     raise RuntimeError("Linear API retries exhausted")  # unreachable after raise_for_status
 
@@ -139,7 +151,11 @@ def is_human_gate_resolved(issue_id: str) -> bool:
     }
     """
     data = _query(query, {"id": issue_id})
-    return data["issue"]["state"]["type"] == "completed"
+    issue = data.get("issue")
+    if not issue:
+        return False
+    state = issue.get("state", {})
+    return state.get("type") == "completed"
 
 
 def get_snapshot_issue(project_id: str) -> Optional[dict]:

@@ -11,7 +11,6 @@ import fcntl
 import json
 import logging
 import os
-import subprocess
 from pathlib import Path
 
 from linear_config import LINEAR_PROJECT_MARKER
@@ -66,7 +65,8 @@ def load_linear_project_state(project_dir: Path) -> dict | None:
     try:
         with open(marker_file, "r") as f:
             return json.load(f)
-    except (json.JSONDecodeError, IOError):
+    except (json.JSONDecodeError, IOError, PermissionError) as e:
+        logger.warning("Could not read %s: %s", marker_file, e)
         return None
 
 
@@ -117,84 +117,6 @@ def print_progress_summary(project_dir: Path) -> None:
     print(f"  (Check Linear for current Done/In Progress/Todo counts)")
 
 
-def is_project_complete(project_dir: Path) -> bool:
-    """
-    Check if all non-META issues in the Linear project are Done.
-
-    Queries the Linear API directly rather than relying on the agent
-    to self-report completion. META issues are excluded from the check
-    since they stay in Backlog as tracking issues.
-
-    Falls back to checking .linear_project.json if the API call fails.
-
-    Args:
-        project_dir: Directory containing .linear_project.json
-
-    Returns:
-        True if all non-META issues are Done
-    """
-    state = load_linear_project_state(project_dir)
-    if state is None:
-        return False
-
-    project_id = state.get("project_id")
-    if not project_id:
-        # No project ID — fall back to local flag
-        return state.get("app_complete", False) is True
-
-    api_key = os.environ.get("LINEAR_API_KEY", "")
-    if not api_key:
-        return state.get("app_complete", False) is True
-
-    # Query Linear for all issues in this project
-    query = json.dumps({
-        "query": (
-            '{ issues(filter: { project: { id: { eq: "%s" } } }) '
-            '{ nodes { title state { name } } } }' % project_id
-        )
-    })
-
-    try:
-        result = subprocess.run(
-            [
-                "curl", "-s", "-X", "POST",
-                "https://api.linear.app/graphql",
-                "-H", f"Authorization: {api_key}",
-                "-H", "Content-Type: application/json",
-                "-d", query,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-
-        if result.returncode != 0:
-            return state.get("app_complete", False) is True
-
-        data = json.loads(result.stdout)
-        issues = data.get("data", {}).get("issues", {}).get("nodes", [])
-
-        if not issues:
-            return False
-
-        # Filter out META issues and check if all remaining are Done
-        non_meta = [i for i in issues if not i["title"].startswith("[META]")]
-
-        if not non_meta:
-            return False
-
-        all_done = all(i["state"]["name"] == "Done" for i in non_meta)
-
-        if all_done:
-            done_count = len(non_meta)
-            print(f"\n  Linear check: {done_count}/{done_count} non-META issues Done")
-
-        return all_done
-
-    except (subprocess.TimeoutExpired, json.JSONDecodeError, KeyError):
-        # API failed — fall back to local flag
-        return state.get("app_complete", False) is True
-
 
 # ---------------------------------------------------------------------------
 # Epic state: read/write from claude-progress.txt
@@ -222,7 +144,11 @@ def _read_epic_state(project_dir: Path) -> dict:
     if not pf.exists():
         return defaults
 
-    content = pf.read_text()
+    try:
+        content = pf.read_text()
+    except (IOError, PermissionError) as e:
+        logger.warning("Could not read %s: %s", pf, e)
+        return defaults
     if EPIC_STATE_START not in content:
         return defaults
 
@@ -305,6 +231,7 @@ def _write_epic_state(project_dir: Path, state: dict) -> None:
 
 def set_current_epic(project_dir: Path, epic_number: int, epic_name: str) -> None:
     """Mark an epic as in_progress and update current epic state."""
+    logger.info("Setting current epic to %s (%s)", epic_number, epic_name)
     state = _read_epic_state(project_dir)
     state["current_epic"] = epic_number
     state["current_epic_name"] = epic_name
@@ -314,6 +241,7 @@ def set_current_epic(project_dir: Path, epic_number: int, epic_name: str) -> Non
 
 def mark_epic_complete(project_dir: Path, epic_number: int) -> None:
     """Mark an epic complete and clear current_epic_number."""
+    logger.info("Marking epic %s complete", epic_number)
     state = _read_epic_state(project_dir)
     state["epic_status"][str(epic_number)] = "complete"
     state["current_epic"] = None
@@ -324,6 +252,7 @@ def mark_epic_complete(project_dir: Path, epic_number: int) -> None:
 
 def set_human_gate(project_dir: Path, issue_id: str) -> None:
     """Record the human gate issue ID — harness will poll this."""
+    logger.info("Human gate set: %s", issue_id)
     state = _read_epic_state(project_dir)
     state["human_gate_issue_id"] = issue_id
     _write_epic_state(project_dir, state)
@@ -331,6 +260,7 @@ def set_human_gate(project_dir: Path, issue_id: str) -> None:
 
 def clear_human_gate(project_dir: Path) -> None:
     """Clear the human gate once resolved."""
+    logger.info("Human gate cleared")
     state = _read_epic_state(project_dir)
     state["human_gate_issue_id"] = None
     _write_epic_state(project_dir, state)
@@ -338,6 +268,7 @@ def clear_human_gate(project_dir: Path) -> None:
 
 def set_linear_project_id(project_dir: Path, project_id: str) -> None:
     """Store the Linear project ID for the current epic."""
+    logger.info("Linear project ID set: %s", project_id)
     state = _read_epic_state(project_dir)
     state["linear_project_id"] = project_id
     _write_epic_state(project_dir, state)

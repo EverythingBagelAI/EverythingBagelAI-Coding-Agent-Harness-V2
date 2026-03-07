@@ -36,7 +36,7 @@ export default defineConfig({
 });
 ```
 
-## The Three-Phase Testing Approach
+## The Four-Phase Testing Approach
 
 ### Phase 1: Plan
 
@@ -49,7 +49,7 @@ Before writing any test code, think through:
 
 Write a brief comment block at the top of the test file documenting this plan.
 
-### Phase 2: Write & Run
+### Phase 2: Write
 
 Write the test. Key rules:
 
@@ -60,9 +60,13 @@ Write the test. Key rules:
 - Group related tests in `test.describe` blocks
 - One `test()` per user flow — not per assertion
 
-Run: `npx playwright test [filename]`
+### Phase 3: Run
 
-### Phase 3: Heal
+```bash
+npx playwright test [filename]
+```
+
+### Phase 4: Fix
 
 If tests fail:
 
@@ -143,10 +147,47 @@ npx playwright test --headed           # Watch mode (see browser)
 npx playwright test --reporter=list    # Verbose output
 ```
 
+## What Passing Looks Like
+
+```
+  ✓ homepage loads and shows navigation (843ms)
+  ✓ user can sign in and see dashboard (1204ms)
+  ✓ form submission shows success message (967ms)
+
+  3 passed (3.1s)
+```
+
+When all tests show ✓ and the summary line shows N passed with no failures, the test requirement is met.
+
+## Shared Setup with beforeEach
+
+For tests that share setup steps (e.g. logging in before every test):
+
+```javascript
+test.beforeEach(async ({ page }) => {
+  await page.goto("/login");
+  await page.fill("[name=email]", "test@example.com");
+  await page.fill("[name=password]", "testpass123");
+  await page.click("[type=submit]");
+  await page.waitForURL("/dashboard");
+});
+```
+
+Use `test.describe` blocks to scope `beforeEach` to a group of related tests.
+
 ## When Tests Cannot Be Written
 
-Some features genuinely cannot be tested with Playwright (e.g. streaming SSE connections are difficult to test, file system operations, third-party OAuth redirects in test environment). In these cases:
+Tests may be skipped ONLY for:
 
-1. Write the test with `test.skip('Reason: [explanation]', ...)`
-2. Add a manual test note in the Linear issue comment
-3. Test the surrounding behaviour instead (e.g. test that the response appears, even if you can't test the SSE connection itself)
+- Third-party OAuth flows that require human interaction (e.g. Google sign-in)
+- Hardware-dependent features (camera, microphone, bluetooth)
+- Features that require a human to physically complete a step
+
+Do NOT skip tests for:
+
+- Streaming responses (test that streaming starts and content arrives)
+- Animation or transitions (test the end state)
+- "Complex" features (simplify the test scope instead)
+
+If you believe a test cannot be written, document the specific reason as a
+code comment before proceeding.

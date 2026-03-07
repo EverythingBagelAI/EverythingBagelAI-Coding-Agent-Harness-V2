@@ -38,6 +38,107 @@ from progress import (
 from prompts import get_coding_prompt, build_coding_agent_session_prompt
 from security import configure_allowed_commands
 
+MAX_ISSUE_RETRIES = 3
+
+
+async def _run_coding_loop(
+    project_dir: Path,
+    project_id: str,
+    epic_number: int,
+    epic_name: str,
+    model: str,
+    ecosystem: dict,
+    max_iterations: int | None,
+    base_prompt: str,
+) -> tuple[int, bool]:
+    """
+    Run the coding agent loop for a single epic.
+    Returns (issues_resolved, should_stop).
+    should_stop=True means the harness should halt entirely.
+    """
+    iteration = 0
+    epic_issues_resolved = 0
+    issue_retry_counts: dict[str, int] = {}
+
+    while True:
+        iteration += 1
+
+        if max_iterations and iteration > max_iterations:
+            print(f"\nReached max iterations ({max_iterations}) for epic {epic_number}")
+            print("Re-run to continue.")
+            return (0, True)
+
+        # Fetch the current issue from Linear
+        current_issue = get_current_issue(project_id)
+
+        if current_issue is None:
+            # All regular issues done — check for human gate
+            gate_issue = get_human_gate_issue(project_id)
+            if gate_issue and gate_issue["state"]["type"] != "completed":
+                gate_id = gate_issue["id"]
+                set_human_gate(project_dir, gate_id)
+                _print_human_gate_pause_detail(
+                    epic_number, gate_issue.get("description", ""), project_dir
+                )
+                return (0, True)
+
+            # No more eligible issues — check if all complete
+            if get_all_issues_complete(project_id):
+                # Run snapshot session before marking epic complete
+                snapshot_issue = get_snapshot_issue(project_id)
+                if snapshot_issue and snapshot_issue["state"]["type"] != "completed":
+                    print(f"\n  Running Snapshot session for Epic {epic_number}...")
+                    snapshot_prompt = build_coding_agent_session_prompt(
+                        project_dir, snapshot_issue, base_prompt
+                    )
+                    snapshot_client = create_client(
+                        project_dir, model, mode="greenfield", ecosystem=ecosystem,
+                        session_type="coding",
+                    )
+                    async with snapshot_client:
+                        await run_agent_session(snapshot_client, snapshot_prompt, project_dir)
+
+                epic_issues_resolved = iteration - 1  # approximate
+                return (epic_issues_resolved, False)
+            else:
+                # Issues exist but none are eligible (all gates/snapshots?)
+                print("  No eligible issues found but epic not complete. Retrying...")
+                await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
+                continue
+
+        issue_id = current_issue["id"]
+        issue_retry_counts[issue_id] = issue_retry_counts.get(issue_id, 0) + 1
+
+        if issue_retry_counts[issue_id] > MAX_ISSUE_RETRIES:
+            print(f"\n  ❌ Issue '{current_issue['title']}' has failed {MAX_ISSUE_RETRIES} times.")
+            print(f"  Fix the issue in Linear or re-run to retry from scratch.")
+            print(f"  Stopping harness to prevent infinite loop.\n")
+            return (0, True)
+
+        # Build the prompt with injected context
+        prompt = build_coding_agent_session_prompt(
+            project_dir, current_issue, base_prompt
+        )
+
+        print_session_header(iteration, False)
+        print(f"  Epic {epic_number}: {epic_name}")
+        print(f"  Issue: {current_issue['title']}")
+        print()
+
+        # Create client and run session
+        client = create_client(
+            project_dir, model, mode="greenfield", ecosystem=ecosystem,
+            session_type="coding",
+        )
+
+        async with client:
+            status, response = await run_agent_session(client, prompt, project_dir)
+
+        if status == "error":
+            print("\nSession encountered an error. Will retry...")
+
+        await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
+
 
 async def run_epic_mode(
     project_dir: Path,
@@ -88,7 +189,7 @@ async def run_epic_mode(
     # Load epic index
     try:
         epic_index = load_epic_index(project_dir)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         print(f"\nError: {e}")
         return
 
@@ -141,99 +242,25 @@ async def run_epic_mode(
                 return
 
         # --- Coding agent loop ---
-        iteration = 0
-        epic_issues_resolved = 0
         base_prompt = get_coding_prompt()
-        issue_retry_counts: dict[str, int] = {}
-        MAX_ISSUE_RETRIES = 3
 
-        while True:
-            iteration += 1
+        epic_issues_resolved, should_stop = await _run_coding_loop(
+            project_dir, project_id, epic_number, epic_name,
+            model, ecosystem, max_iterations, base_prompt,
+        )
 
-            if max_iterations and iteration > max_iterations:
-                print(f"\nReached max iterations ({max_iterations}) for epic {epic_number}")
-                print("Re-run to continue.")
-                return
+        if should_stop:
+            return
 
-            # Fetch the current issue from Linear
-            current_issue = get_current_issue(project_id)
+        total_issues_resolved += epic_issues_resolved
+        mark_epic_complete(project_dir, epic_number)
+        epics_completed += 1
 
-            if current_issue is None:
-                # All regular issues done — check for human gate
-                gate_issue = get_human_gate_issue(project_id)
-                if gate_issue and gate_issue["state"]["type"] != "completed":
-                    gate_id = gate_issue["id"]
-                    set_human_gate(project_dir, gate_id)
-                    _print_human_gate_pause_detail(
-                        epic_number, gate_issue.get("description", ""), project_dir
-                    )
-                    return
-
-                # No more eligible issues — check if all complete
-                if get_all_issues_complete(project_id):
-                    # Run snapshot session before marking epic complete
-                    snapshot_issue = get_snapshot_issue(project_id)
-                    if snapshot_issue and snapshot_issue["state"]["type"] != "completed":
-                        print(f"\n  Running Snapshot session for Epic {epic_number}...")
-                        snapshot_prompt = build_coding_agent_session_prompt(
-                            project_dir, snapshot_issue, base_prompt
-                        )
-                        snapshot_client = create_client(
-                            project_dir, model, mode="greenfield", ecosystem=ecosystem,
-                            session_type="coding",
-                        )
-                        async with snapshot_client:
-                            await run_agent_session(snapshot_client, snapshot_prompt, project_dir)
-
-                    epic_issues_resolved = iteration - 1  # approximate
-                    total_issues_resolved += epic_issues_resolved
-                    mark_epic_complete(project_dir, epic_number)
-                    epics_completed += 1
-
-                    next_epic = get_next_pending_epic(project_dir)
-                    if next_epic is not None:
-                        next_entry = get_epic_by_number(project_dir, next_epic)
-                        next_name = next_entry["name"] if next_entry else "unknown"
-                        _print_epic_completion(epic_number, epic_name, epic_issues_resolved, next_epic, next_name)
-                    break
-                else:
-                    # Issues exist but none are eligible (all gates/snapshots?)
-                    print("  No eligible issues found but epic not complete. Retrying...")
-                    await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
-                    continue
-
-            issue_id = current_issue["id"]
-            issue_retry_counts[issue_id] = issue_retry_counts.get(issue_id, 0) + 1
-
-            if issue_retry_counts[issue_id] > MAX_ISSUE_RETRIES:
-                print(f"\n  ❌ Issue '{current_issue['title']}' has failed {MAX_ISSUE_RETRIES} times.")
-                print(f"  Fix the issue in Linear or re-run to retry from scratch.")
-                print(f"  Stopping harness to prevent infinite loop.\n")
-                return
-
-            # Build the prompt with injected context
-            prompt = build_coding_agent_session_prompt(
-                project_dir, current_issue, base_prompt
-            )
-
-            print_session_header(iteration, False)
-            print(f"  Epic {epic_number}: {epic_name}")
-            print(f"  Issue: {current_issue['title']}")
-            print()
-
-            # Create client and run session
-            client = create_client(
-                project_dir, model, mode="greenfield", ecosystem=ecosystem,
-                session_type="coding",
-            )
-
-            async with client:
-                status, response = await run_agent_session(client, prompt, project_dir)
-
-            if status == "error":
-                print("\nSession encountered an error. Will retry...")
-
-            await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
+        next_epic = get_next_pending_epic(project_dir)
+        if next_epic is not None:
+            next_entry = get_epic_by_number(project_dir, next_epic)
+            next_name = next_entry["name"] if next_entry else "unknown"
+            _print_epic_completion(epic_number, epic_name, epic_issues_resolved, next_epic, next_name)
 
     # --- Final summary ---
     _print_final_completion(epics_completed, total_issues_resolved)

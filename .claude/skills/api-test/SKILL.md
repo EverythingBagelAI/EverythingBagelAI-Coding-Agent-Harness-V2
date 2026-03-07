@@ -226,6 +226,66 @@ api_tests/
 └── test_error_handling.py
 ```
 
+### conftest.py Example
+
+```python
+# api_tests/conftest.py
+import httpx
+import pytest
+
+BASE_URL = "http://localhost:8000"
+
+@pytest.fixture(scope="session")
+def client():
+    return httpx.Client(base_url=BASE_URL, timeout=10)
+
+@pytest.fixture(scope="session")
+def auth_token(client):
+    r = client.post("/api/v1/auth/login", json={
+        "email": "test@example.com",
+        "password": "testpass123",
+    })
+    assert r.status_code == 200, f"Login failed: {r.text}"
+    return r.json()["access_token"]
+
+@pytest.fixture(scope="session")
+def authed_client(auth_token):
+    return httpx.Client(
+        base_url=BASE_URL,
+        timeout=10,
+        headers={"Authorization": f"Bearer {auth_token}"},
+    )
+
+@pytest.fixture(scope="session")
+def other_user_client():
+    """Client authenticated as a different user for isolation tests."""
+    c = httpx.Client(base_url=BASE_URL, timeout=10)
+    r = c.post("/api/v1/auth/login", json={
+        "email": "other@example.com",
+        "password": "testpass123",
+    })
+    assert r.status_code == 200
+    c.headers.update({"Authorization": f"Bearer {r.json()['access_token']}"})
+    return c
+```
+
+## Test Isolation
+
+Tests must not depend on each other or on pre-existing database state.
+
+- Use unique values for fields that must be unique (e.g. `f"test-{uuid4().hex[:8]}"`)
+- Create test data in each test or fixture, never assume it exists
+- If your test creates records, clean them up in a fixture teardown:
+
+```python
+@pytest.fixture
+def created_item(authed_client):
+    r = authed_client.post("/api/v1/items", json={"title": "Test Item"})
+    item_id = r.json()["id"]
+    yield item_id
+    authed_client.delete(f"/api/v1/items/{item_id}")  # cleanup
+```
+
 ## What Passing Looks Like
 
 ```
