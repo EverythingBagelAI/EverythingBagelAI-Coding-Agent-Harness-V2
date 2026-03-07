@@ -17,5 +17,6 @@ __pycache__/
 # macOS
 .DS_Store
 
-# Claude Code local config
-.claude/
+# Claude Code local config (except harness skills)
+.claude/*
+!.claude/skills/
