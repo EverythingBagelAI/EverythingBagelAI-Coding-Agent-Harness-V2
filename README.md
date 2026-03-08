@@ -10,7 +10,7 @@ This harness turns a written spec into a working codebase by decomposing it into
 
 **V1 mode (Greenfield/Brownfield)** is a single-loop agent. Give it a spec and a project directory (greenfield) or point it at an existing codebase (brownfield), and it creates Linear issues then works through them one at a time. Simple, direct, good for smaller projects that fit in a single build sequence.
 
-**V2 mode (Epic)** is a multi-stage pipeline for larger projects. An Architect agent reads your master spec and decomposes it into 4–7 ordered epics, each with its own sub-spec. The harness then works through epics sequentially: an Epic Initialiser creates Linear issues from the sub-spec, a coding agent resolves them one per session, and a snapshot session updates `shared_context.md` with the current architectural state before moving to the next epic. Human gate issues pause execution for manual setup (API keys, OAuth apps, DNS) and resume when you mark them done in Linear.
+**V2 mode (Epic)** is a multi-stage pipeline for larger projects. It uses a two-stage epic generation process: first, an Architect agent reads your master spec and produces an enriched epic index with detailed briefs for each epic. Then, separate Spec Writer agents — one per epic, each in a fresh 200K context window — expand those briefs into full epic sub-specs. Because each writer sees all previously completed specs, later epics build consistently on earlier architectural decisions without context window saturation. The harness then works through epics sequentially: an Epic Initialiser creates Linear issues from the sub-spec, a coding agent resolves them one per session, and a snapshot session updates `shared_context.md` with the current architectural state before moving to the next epic. Human gate issues pause execution for manual setup (API keys, OAuth apps, DNS) and resume when you mark them done in Linear.
 
 ---
 
@@ -42,13 +42,14 @@ pip install -r requirements.txt
 
 Set these environment variables before running:
 
-| Variable                    | Required | Description                                                                                                                                                        |
-| --------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CLAUDE_CODE_OAUTH_TOKEN`   | Yes      | Claude Code OAuth token — run `claude setup-token` to generate                                                                                                     |
-| `LINEAR_API_KEY`            | Yes      | Linear API key (Settings → API → Create Key)                                                                                                                       |
-| `REF_API_KEY`               | No       | [Ref.tools](https://ref.tools) API key for library doc pre-fetching. Without it, the harness runs fine but the agent relies on training knowledge for library docs |
-| `HARNESS_SESSION_TIMEOUT`   | No       | Coding session timeout in seconds (default: 1800 = 30 min)                                                                                                         |
-| `HARNESS_ARCHITECT_TIMEOUT` | No       | Architect session timeout in seconds (default: 3600 = 60 min)                                                                                                      |
+| Variable                      | Required | Description                                                                                                                                                        |
+| ----------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CLAUDE_CODE_OAUTH_TOKEN`     | Yes      | Claude Code OAuth token — run `claude setup-token` to generate                                                                                                     |
+| `LINEAR_API_KEY`              | Yes      | Linear API key (Settings → API → Create Key)                                                                                                                       |
+| `REF_API_KEY`                 | No       | [Ref.tools](https://ref.tools) API key for library doc pre-fetching. Without it, the harness runs fine but the agent relies on training knowledge for library docs |
+| `HARNESS_SESSION_TIMEOUT`     | No       | Coding session timeout in seconds (default: 1800 = 30 min)                                                                                                         |
+| `HARNESS_ARCHITECT_TIMEOUT`   | No       | Architect session timeout in seconds (default: 3600 = 60 min)                                                                                                      |
+| `HARNESS_EPIC_WRITER_TIMEOUT` | No       | Per-epic spec writer timeout in seconds (default: 900 = 15 min)                                                                                                    |
 
 **The harness configures the Linear MCP connection automatically using `LINEAR_API_KEY`. You do not need to set up Linear OAuth or the Linear MCP server manually.**
 
@@ -71,7 +72,13 @@ cp templates/master_app_spec_template.md prompts/master_app_spec.md
 python generate_epics.py --project-dir ./my-project
 ```
 
-This produces an `epics/` directory and `shared_context.md` inside `./my-project`. Review the generated epics before continuing — this is your cheapest quality gate. Edit human gate checklists, fix epic ordering, and split or merge epics as needed.
+This runs two stages automatically: first the Architect decomposes your spec into an enriched epic index, then individual Spec Writer agents produce each epic's sub-spec sequentially (each in a fresh context window). If any writer fails, you can retry just the failed ones:
+
+```bash
+python generate_epics.py --project-dir ./my-project --retry-failed
+```
+
+The output is an `epics/` directory and `shared_context.md` inside `./my-project`. Review the generated epics before continuing — this is your cheapest quality gate. Edit human gate checklists, fix epic ordering, and split or merge epics as needed.
 
 **3. Run the coding loop:**
 
@@ -135,7 +142,7 @@ The harness runs an allowlist-based security layer on all bash commands the agen
 
 ```
 ├── autonomous_agent_demo.py        # Main entry point
-├── generate_epics.py               # Architect agent — decomposes spec into epics
+├── generate_epics.py               # Two-stage epic generator (decomposition + per-epic writing)
 ├── epic_orchestrator.py            # Epic mode loop — gate checking, sessions, snapshots
 ├── agent.py                        # Agent session logic
 ├── config.py                       # Model and timeout configuration
@@ -143,7 +150,8 @@ The harness runs an allowlist-based security layer on all bash commands the agen
 ├── prompts/
 │   ├── coding_prompt.md            # Instructions for the coding agent
 │   ├── epic_initializer_prompt.md  # Instructions for the epic initialiser
-│   └── architect_prompt.md         # Instructions for the architect agent
+│   ├── architect_prompt.md         # Instructions for the architect agent (Stage 1)
+│   └── epic_writer_prompt.md      # Instructions for per-epic spec writers (Stage 2)
 ├── .claude/skills/
 │   ├── e2e-test/SKILL.md           # Playwright E2E testing patterns
 │   └── api-test/SKILL.md           # API testing patterns (httpx + pytest)

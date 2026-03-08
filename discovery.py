@@ -35,6 +35,7 @@ CLAUDE_JSON = Path.home() / ".claude.json"
 # None = load all (preserves V1 behaviour). List = case-insensitive substring match.
 SESSION_MCP_SCOPES: dict[str, list[str] | None] = {
     "architect": ["ref", "exa"],
+    "epic_writer": ["ref", "exa"],
     "epic_initializer": ["linear"],
     "coding": ["linear", "ref"],
     "initializer": None,

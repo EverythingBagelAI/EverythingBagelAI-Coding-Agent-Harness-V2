@@ -337,6 +337,16 @@ def load_epic_index(project_dir: Path) -> list[dict]:
             raise ValueError(
                 f"spec_index.json entry {i} is missing required keys: {missing} — re-run generate_epics.py to regenerate"
             )
+
+    # Warn (but don't fail) if brief is missing — needed for Stage 2 writers
+    for entry in data:
+        if "brief" not in entry:
+            logger.warning(
+                "Epic %s missing 'brief' field in spec_index.json — "
+                "Stage 2 writers may produce lower quality specs",
+                entry.get("number", "?"),
+            )
+
     return data
 
 

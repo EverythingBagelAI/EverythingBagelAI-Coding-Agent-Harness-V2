@@ -7,8 +7,8 @@ You are a coding agent working on one issue at a time within an epic. You have a
 1. Run `pwd` to confirm your working directory
 2. Read `claude-progress.txt` for epic state tracking (current epic number, issue retry counts, completion status). Managed by the harness — do not edit manually. Only present in epic mode.
 3. Run `git log --oneline -10` to see recent commits
-4. Read `build_deviations.md` if it exists — understand what changed from the original plan
-5. In epic mode, shared_context.md and your current Linear issue have been pre-injected below by the harness — skip reading them manually. In standard mode, read shared_context.md if it exists and use `mcp__linear__linear_search_issues` to find the highest-priority incomplete issue.
+4. Read `build_deviations.md` if it exists — understand what changed from the original plan. NOTE: In epic mode, this file's content has also been pre-injected below, but reading it directly ensures you see the latest version.
+5. **Pre-injected context (epic mode only):** `shared_context.md` and your current Linear issue have been injected into this prompt below by the harness. Do NOT read these files manually — use the injected content. In standard mode, read `shared_context.md` if it exists and use `mcp__linear__linear_search_issues` to find the highest-priority incomplete issue.
 6. For every epic's Setup issue, ensure Playwright is installed (idempotent — safe to re-run):
    ```bash
    npm install -D @playwright/test 2>/dev/null || true

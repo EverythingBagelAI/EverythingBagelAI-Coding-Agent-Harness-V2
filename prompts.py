@@ -8,10 +8,12 @@ and fetches issue data, then injects everything as pre-populated context
 blocks in the prompt so the agent never needs to discover state itself.
 """
 
+import json
 import logging
 import os
 import re
 import shutil
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
@@ -113,13 +115,50 @@ def _fetch_ref_doc(query: str, api_key: str) -> tuple[str, str | None]:
     return query, None
 
 
-# TODO: Ref documentation results are not cached between sessions. On long
-# epic runs with many issues, this may cause rate limiting on the Ref API.
-# Future improvement: cache results to a local file keyed by library name.
-def prefetch_ref_docs(spec_text: str, ref_api_key: str | None = None) -> str:
+def _get_ref_cache_path(project_dir: Path | None = None) -> Path | None:
+    """Get the path to the Ref documentation cache file."""
+    if project_dir is None:
+        return None
+    return project_dir / ".ref_cache.json"
+
+
+def _load_ref_cache(cache_path: Path | None) -> dict[str, dict]:
+    """Load cached Ref documentation results. Returns {library: {content, timestamp}}."""
+    if cache_path is None or not cache_path.exists():
+        return {}
+    try:
+        data = json.loads(cache_path.read_text())
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, IOError):
+        pass
+    return {}
+
+
+def _save_ref_cache(cache_path: Path | None, cache: dict[str, dict]) -> None:
+    """Save Ref documentation cache to disk."""
+    if cache_path is None:
+        return
+    try:
+        cache_path.write_text(json.dumps(cache, indent=2))
+    except IOError as e:
+        logger.warning("[Ref Cache] Could not write cache: %s", e)
+
+
+REF_CACHE_TTL_SECONDS = 86400  # 24 hours
+
+
+def prefetch_ref_docs(
+    spec_text: str,
+    ref_api_key: str | None = None,
+    project_dir: Path | None = None,
+) -> str:
     """
     Parse spec_text for library/framework names and fetch relevant documentation
     from the Ref API before the agent session starts.
+
+    Uses a file-based cache at {project_dir}/.ref_cache.json with 24h TTL to avoid
+    redundant fetches across sessions.
 
     Returns a formatted context block to inject into the agent prompt.
     If REF_API_KEY is not set or fetch fails, returns empty string (graceful degradation).
@@ -135,25 +174,50 @@ def prefetch_ref_docs(spec_text: str, ref_api_key: str | None = None) -> str:
 
     logger.info("[Ref Prefetch] Fetching docs for: %s", ", ".join(libraries))
 
+    # Load cache
+    cache_path = _get_ref_cache_path(project_dir)
+    cache = _load_ref_cache(cache_path)
+    now = time.time()
+
     sections: list[str] = []
+    libs_to_fetch: list[str] = []
 
-    try:
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            futures = {
-                executor.submit(_fetch_ref_doc, lib, api_key): lib
-                for lib in libraries
-            }
+    # Check cache first
+    for lib in libraries:
+        cached = cache.get(lib)
+        if cached and (now - cached.get("timestamp", 0)) < REF_CACHE_TTL_SECONDS:
+            content = cached.get("content")
+            if content:
+                sections.append(f"### {lib}\n{content}")
+                logger.info("[Ref Prefetch] Cache hit: %s", lib)
+        else:
+            libs_to_fetch.append(lib)
 
-            for future in as_completed(futures, timeout=15):
-                try:
-                    query, content = future.result(timeout=5)
-                    if content:
-                        sections.append(f"### {query}\n{content}")
-                except Exception:
-                    pass
-    except Exception as e:
-        logger.warning("[Ref Prefetch] Error during documentation fetch: %s", e)
-        return ""
+    # Fetch uncached libraries
+    if libs_to_fetch:
+        try:
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = {
+                    executor.submit(_fetch_ref_doc, lib, api_key): lib
+                    for lib in libs_to_fetch
+                }
+
+                for future in as_completed(futures, timeout=15):
+                    try:
+                        query, content = future.result(timeout=5)
+                        if content:
+                            sections.append(f"### {query}\n{content}")
+                            cache[query] = {"content": content, "timestamp": now}
+                        else:
+                            # Cache the miss too to avoid re-fetching
+                            cache[query] = {"content": None, "timestamp": now}
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.warning("[Ref Prefetch] Error during documentation fetch: %s", e)
+
+    # Save updated cache
+    _save_ref_cache(cache_path, cache)
 
     if not sections:
         return ""
@@ -244,7 +308,7 @@ def build_epic_initializer_context(epic_number: int, project_dir: Path) -> str:
     sections.append(_wrap_context(epic["spec_file"], epic_spec))
 
     # 5. Pre-fetched Ref documentation
-    ref_docs = prefetch_ref_docs(epic_spec)
+    ref_docs = prefetch_ref_docs(epic_spec, project_dir=project_dir)
     if ref_docs:
         sections.append(ref_docs)
 
@@ -290,7 +354,7 @@ def build_coding_agent_session_prompt(
 
     # Pre-fetched Ref documentation
     issue_desc = current_issue.get("description", "") if current_issue else ""
-    ref_docs = prefetch_ref_docs(issue_desc + " " + shared_text)
+    ref_docs = prefetch_ref_docs(issue_desc + " " + shared_text, project_dir=project_dir)
     if ref_docs:
         sections.append(ref_docs)
 
