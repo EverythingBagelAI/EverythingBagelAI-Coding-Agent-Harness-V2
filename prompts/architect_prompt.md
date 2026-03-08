@@ -66,7 +66,7 @@ The cross-epic context that every Epic Initializer will read. This file lives at
 
 ### epics/epic-NN-[name].md (one file per epic)
 
-Each epic spec must be under 1,500 words and follow this exact template:
+Each epic spec should be as detailed as necessary to eliminate ambiguity — there is no hard word limit. The coding agent's context window (200K tokens) can comfortably handle large specs. More detail on schemas, endpoints, edge cases, and acceptance criteria means less guessing and better output. Aim for precision, not padding — every line should earn its place. Each spec must follow this exact template:
 
 ```
 # Epic N: [Name]
@@ -74,13 +74,16 @@ Each epic spec must be under 1,500 words and follow this exact template:
 ## Meta
 - depends_on: [epic numbers, or "none"]
 - builds: [2-sentence summary of what this epic produces]
-- estimated_issues: [10-25]
+- estimated_issues: [10-50]
 
 ## Purpose
 [2-3 sentences. What does this epic achieve? What is the user able to do after this epic is complete that they couldn't before?]
 
 ## Features
-[Numbered list. One sentence each. 8-20 items. These become Linear issues.]
+[Numbered list. One sentence each. 8-40 items. These become Linear issues.
+Each feature should be a small, atomic unit of work — a single component, endpoint, function, or integration — NOT an entire feature area or system.
+BAD:  "Implement authentication" / "Build the dashboard" / "Add payments"
+GOOD: "Create POST /api/auth/login endpoint with JWT response" / "Build DashboardSidebar component with nav links" / "Add Stripe checkout session creation endpoint"]
 
 ## UI/UX Notes
 [Specific to this epic. Reference the shared design system from shared_context.md rather than repeating it. Focus on layout decisions, interaction patterns, and component choices unique to this epic.]
@@ -114,7 +117,7 @@ When complete, mark this issue Done in Linear and re-run the harness.
 
 ## Epic Design Rules
 
-1. **Minimise epic count** while keeping each epic completable in one day of agent sessions (roughly 10-25 issues). Prefer 4-7 epics over 10+.
+1. **Minimise epic count** while keeping each epic completable in one day of agent sessions (roughly 10-50 issues, maximum 50). Prefer 4-7 epics over 10+. Each issue should represent a small, atomic unit of work (typically 1-3 hours of agent time) — a single component, endpoint, function, or integration.
 
 2. **Epic 1 is always Foundation** — database schema, project scaffolding, environment setup, core layout shell. No external auth services, no paid APIs. The agent must be able to run and test this epic with zero manual setup (no human gate on Epic 1's predecessor).
 
@@ -146,6 +149,6 @@ Before writing any files, verify your plan:
 
 - Is Epic 1 truly self-contained with no external service dependencies?
 - Does each human gate list only things the agent genuinely cannot do?
-- Is every epic under 1,500 words?
+- Is every epic detailed enough to eliminate ambiguity, without repetition or padding?
 - Are dependency declarations bidirectional (if A blocks B, B declares depends_on A)?
 - Does shared_context.md stay under 400 words?

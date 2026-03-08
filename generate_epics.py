@@ -9,7 +9,7 @@ to decompose it into epic sub-specs in the epics/ directory.
 Usage:
     python generate_epics.py --project-dir ./my-project
     python generate_epics.py --project-dir ./my-project --spec path/to/custom_spec.md
-    python generate_epics.py --project-dir ./my-project --model claude-opus-4-5-20251101
+    python generate_epics.py --project-dir ./my-project --model claude-opus-4-6
 """
 
 import argparse
@@ -42,7 +42,7 @@ Examples:
   python generate_epics.py --project-dir ./my-project --spec path/to/custom_spec.md
 
   # Use a specific model
-  python generate_epics.py --project-dir ./my-project --model claude-sonnet-4-5-20250929
+  python generate_epics.py --project-dir ./my-project --model claude-opus-4-6
 
 Environment Variables:
   CLAUDE_CODE_OAUTH_TOKEN    Claude Code OAuth token (required)

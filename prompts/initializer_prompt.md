@@ -36,23 +36,26 @@ Based on `app_spec.txt`, create Linear issues for each feature using the
 **IMPORTANT: Analyze the specification and determine the appropriate number of issues.**
 
 You should create enough issues to comprehensively cover all features while ensuring
-each issue represents a focused, testable piece of functionality. Avoid both:
+each issue represents a small, atomic unit of work — a single component, endpoint, function, or integration. Each issue should be completable in one agent session (5-20 minutes). Avoid both:
 
 - Issues that are too large (covering too many unrelated features)
 - Issues that are too granular (single function or trivial changes)
 
-Typical projects range from 50-300 issues depending on complexity:
+Aim for a maximum of 50 issues total. Most projects should land between 20-50 issues.
 
-- Small/simple apps: 50-100 issues
-- Medium complexity apps: 100-200 issues
-- Large/complex apps: 200-300+ issues
+**Issue Scoping — Good vs Bad:**
+
+Each issue must be specific and actionable, not vague.
+
+BAD: "Implement authentication" / "Build the dashboard" / "Add API endpoints"
+GOOD: "Create POST /api/auth/login endpoint with JWT response" / "Build DashboardSidebar component with nav links" / "Add form validation to SignUpForm with Zod schema"
 
 Take your time to analyze the spec carefully and create the right number of detailed issues.
 
 **For each feature, create an issue with:**
 
 ```
-title: Brief feature name (e.g., "Auth - User login flow")
+title: Specific, actionable feature name (e.g., "Create POST /api/auth/login endpoint with JWT response")
 teamId: [Use the team ID you found earlier]
 projectId: [Use the project ID from the project you created]
 description: Markdown with feature details and test steps (see template below)

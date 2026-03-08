@@ -1,6 +1,6 @@
 # Master App Spec Template
 
-Copy this file to `prompts/master_app_spec.md` and fill it in. Keep the total under 1,500 words. The Architect Agent will expand it into full epic specs.
+Copy this file to `prompts/master_app_spec.md` and fill it in. There is no hard size limit — the Architect Agent's context window can handle specs of several thousand lines. Write as much detail as needed to fully describe your app. The Architect will decompose it into focused epic sub-specs.
 
 ---
 

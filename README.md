@@ -62,7 +62,7 @@ This is the main workflow for large projects.
 
 ```bash
 cp templates/master_app_spec_template.md prompts/master_app_spec.md
-# Edit prompts/master_app_spec.md with your app description (500–1500 words)
+# Edit prompts/master_app_spec.md with your app description (no hard size limit)
 ```
 
 **2. Generate epics:**

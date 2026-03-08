@@ -290,7 +290,7 @@ async def run_autonomous_agent(
             print("=" * 70)
             print("  NOTE: First session takes 10-20+ minutes!")
             print("  The agent is analysing the spec and creating Linear issues")
-            print("  (typically 50-300 based on complexity).")
+            print("  (typically 20-50 based on complexity).")
             print("  This may appear to hang - it's working. Watch for [Tool: ...] output.")
             print("=" * 70)
             print()

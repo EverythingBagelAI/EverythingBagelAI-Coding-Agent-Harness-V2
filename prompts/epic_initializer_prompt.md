@@ -33,11 +33,33 @@ Create issues in this order:
 
 ## Issue Quality Rules
 
-- Each issue must be completable in one agent session (5-20 minutes)
+- Each issue must be completable in one agent session (5-20 minutes) — a single component, endpoint, function, or integration
 - If a feature is complex, split it into multiple issues
 - Never create an issue that depends on another incomplete issue in the same epic — order them so each builds on the last
 - Every issue description must end with: `Acceptance criteria: [specific, testable conditions]`
 - For any issue that touches an external library, add: `Before implementing, use ref_search_documentation to look up: [specific query]`
+
+### Issue Scoping — Good vs Bad
+
+Each issue title and description must be specific and actionable. Vague issues cause the agent to guess scope and produce unfocused work.
+
+**BAD issue titles** (too vague, too broad):
+
+- "Implement authentication"
+- "Build the dashboard"
+- "Add API endpoints"
+- "Set up database"
+- "Handle payments"
+
+**GOOD issue titles** (atomic, specific, actionable):
+
+- "Create POST /api/auth/login endpoint with JWT response"
+- "Build DashboardSidebar component with nav links and active state"
+- "Add Stripe checkout session creation endpoint with price lookup"
+- "Create users table migration with email, name, and role columns"
+- "Implement useAuth hook with login/logout/session state"
+- "Add form validation to SignUpForm with Zod schema"
+- "Create GET /api/projects/:id endpoint with ownership check"
 
 ## Linear Issue Format Examples
 
@@ -105,8 +127,8 @@ labelNames: ["human-gate", "blocked"]
 
 ## What You Must NOT Do
 
-- Do not create more than 30 issues per epic
-- Do not create vague issues like "implement the dashboard" — be specific
+- Do not create more than 50 issues per epic
+- Do not create vague issues like "implement the dashboard" — be specific (see Issue Scoping section above)
 - Do not reference files or functions that don't exist yet in earlier issues
 - Do not create the human gate issue for the final epic
 
