@@ -5,8 +5,7 @@ You are a coding agent working on one issue at a time within an epic. You have a
 ## Session Startup (Non-Negotiable — Do This Every Session)
 
 1. Run `pwd` to confirm your working directory
-2. Read `claude-progress.txt` for recent session history
-   # Note: this file is managed by the harness — do not write to it directly
+2. Read `claude-progress.txt` for epic state tracking (current epic number, issue retry counts, completion status). Managed by the harness — do not edit manually. Only present in epic mode.
 3. Run `git log --oneline -10` to see recent commits
 4. Read `build_deviations.md` if it exists — understand what changed from the original plan
 5. In epic mode, shared_context.md and your current Linear issue have been pre-injected below by the harness — skip reading them manually. In standard mode, read shared_context.md if it exists and use `mcp__linear__linear_search_issues` to find the highest-priority incomplete issue.
@@ -16,10 +15,14 @@ You are a coding agent working on one issue at a time within an epic. You have a
    npx playwright install chromium 2>/dev/null || true
    ```
 7. Run `init.sh` if it exists (`[ -f ./init.sh ] && ./init.sh`). Otherwise start the dev server in the background:
+   - Check the framework config for the actual port:
+     - Next.js/React: check package.json scripts or vite.config.js (default: 3000 or 5173)
+     - FastAPI/uvicorn: check main.py or pyproject.toml (default: 8000)
+   - Use `lsof -i :<port>` to verify the server is listening before proceeding.
    - If this is a Node.js project (package.json exists):
      ```bash
      npm run dev > /tmp/dev-server.log 2>&1 &
-     sleep 3 && curl -s http://localhost:3000 > /dev/null || sleep 5
+     sleep 3 && lsof -i :3000 > /dev/null 2>&1 || sleep 5
      echo "Dev server PID: $!"
      ```
    - If this is a Python project (manage.py, main.py, or app.py exists):
@@ -37,7 +40,7 @@ You are a coding agent working on one issue at a time within an epic. You have a
    issue. Do not spend more than 10 minutes attempting to fix inherited test failures
    — that is a separate issue to be logged.
 
-If the app is broken when you start, fix the breakage before implementing anything new. Commit the fix separately.
+If the app is broken when you start, spend no more than 15 minutes attempting to fix the breakage before implementing anything new. If unresolved after 15 minutes, document the breakage in a comment, log it as a separate Linear issue if appropriate, and proceed with your assigned work. Commit any fix separately.
 
 ## Implementation Loop (One Issue at a Time)
 

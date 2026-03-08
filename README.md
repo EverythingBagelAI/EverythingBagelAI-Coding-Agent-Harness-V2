@@ -225,6 +225,12 @@ my-project/
 
 ---
 
+## Important Notes
+
+**Do not mix V1 and V2 modes in the same project directory.** V1 (greenfield/brownfield) and V2 (epic) modes write different schemas to `.linear_project.json`. Running both modes in the same directory will cause incorrect Linear project detection. Use separate directories for V1 and V2 projects.
+
+---
+
 ## Troubleshooting
 
 **`CLAUDE_CODE_OAUTH_TOKEN not set`**

@@ -627,7 +627,6 @@ def _filter_mcps_by_session(
 def discover_user_ecosystem(
     project_dir: Path | None = None,
     linear_api_key: str | None = None,
-    session_type: str | None = None,
 ) -> EcosystemInfo:
     """
     Orchestrator — discovers the complete user ecosystem at runtime.
@@ -635,8 +634,6 @@ def discover_user_ecosystem(
     Args:
         project_dir: The project directory (for project-specific MCPs)
         linear_api_key: Linear API key (for harness-required MCP)
-        session_type: Optional session type for MCP scoping (e.g. "epic_initializer", "coding").
-                      When provided, filters merged MCPs to only those needed for the session type.
 
     Returns:
         Complete EcosystemInfo with all discovery results

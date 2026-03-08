@@ -119,16 +119,8 @@ async def _get_all_issues(project_id: str) -> list[dict]:
     return all_issues
 
 
-async def get_current_issue(project_id: str) -> Optional[dict]:
-    """
-    Fetch the highest-priority incomplete issue in the project
-    that is NOT a Human Gate or Snapshot issue.
-
-    Returns dict with: id, title, description, priority, state.name
-    Returns None if no eligible issues remain.
-    """
-    issues = await _get_all_issues(project_id)
-    # Filter to incomplete, non-gate, non-snapshot issues
+def filter_current_issue(issues: list[dict]) -> Optional[dict]:
+    """Filter pre-fetched issues to find the highest-priority incomplete non-meta issue."""
     eligible = []
     for issue in issues:
         title = issue["title"]
@@ -138,13 +130,49 @@ async def get_current_issue(project_id: str) -> Optional[dict]:
         if state_type in ("completed", "cancelled"):
             continue
         eligible.append(issue)
-
     if not eligible:
         return None
-
-    # Sort by priority (lower number = higher priority, 0 = no priority goes last)
     eligible.sort(key=lambda i: i.get("priority", 0) or 999)
     return eligible[0]
+
+
+def filter_human_gate_issue(issues: list[dict]) -> Optional[dict]:
+    """Filter pre-fetched issues to find the human gate issue."""
+    gate_issues = [i for i in issues if i["title"].upper().startswith(HUMAN_GATE_MARKER)]
+    return gate_issues[-1] if gate_issues else None
+
+
+def filter_all_issues_complete(issues: list[dict]) -> bool:
+    """Check if all non-gate, non-snapshot issues are completed/cancelled."""
+    if not issues:
+        return False
+    for issue in issues:
+        title = issue["title"]
+        if title.upper().startswith(HUMAN_GATE_MARKER) or title.upper().startswith(SNAPSHOT_MARKER):
+            continue
+        if issue.get("state", {}).get("type", "") not in ("completed", "cancelled"):
+            return False
+    return True
+
+
+def filter_snapshot_issue(issues: list[dict]) -> Optional[dict]:
+    """Filter pre-fetched issues to find the snapshot issue."""
+    for issue in issues:
+        if issue.get("title", "").upper().startswith(SNAPSHOT_MARKER):
+            return issue
+    return None
+
+
+async def get_current_issue(project_id: str) -> Optional[dict]:
+    """
+    Fetch the highest-priority incomplete issue in the project
+    that is NOT a Human Gate or Snapshot issue.
+
+    Returns dict with: id, title, description, priority, state.name
+    Returns None if no eligible issues remain.
+    """
+    issues = await _get_all_issues(project_id)
+    return filter_current_issue(issues)
 
 
 async def get_human_gate_issue(project_id: str) -> Optional[dict]:
@@ -154,8 +182,7 @@ async def get_human_gate_issue(project_id: str) -> Optional[dict]:
     Returns None if not found.
     """
     issues = await _get_all_issues(project_id)
-    gate_issues = [i for i in issues if i["title"].upper().startswith(HUMAN_GATE_MARKER)]
-    return gate_issues[-1] if gate_issues else None
+    return filter_human_gate_issue(issues)
 
 
 async def is_human_gate_resolved(issue_id: str) -> bool:
@@ -178,10 +205,7 @@ async def is_human_gate_resolved(issue_id: str) -> bool:
 async def get_snapshot_issue(project_id: str) -> Optional[dict]:
     """Get the [SNAPSHOT] issue for a project."""
     issues = await _get_all_issues(project_id)
-    for issue in issues:
-        if issue.get("title", "").upper().startswith(SNAPSHOT_MARKER):
-            return issue
-    return None
+    return filter_snapshot_issue(issues)
 
 
 async def get_all_issues_complete(project_id: str) -> bool:
@@ -193,10 +217,4 @@ async def get_all_issues_complete(project_id: str) -> bool:
     if not issues:
         logger.warning("Project %s returned no issues from Linear API", project_id)
         return False
-    for issue in issues:
-        title = issue["title"]
-        if title.upper().startswith(HUMAN_GATE_MARKER) or title.upper().startswith(SNAPSHOT_MARKER):
-            continue
-        if issue.get("state", {}).get("type", "") not in ("completed", "cancelled"):
-            return False
-    return True
+    return filter_all_issues_complete(issues)

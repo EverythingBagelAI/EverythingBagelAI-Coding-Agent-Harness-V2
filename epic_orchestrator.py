@@ -19,11 +19,12 @@ from agent import run_agent_session, run_agent_session_with_timeout, run_epic_in
 from client import create_client
 from discovery import discover_user_ecosystem, print_discovery_summary
 from linear_client import (
-    get_current_issue,
-    get_human_gate_issue,
+    _get_all_issues,
+    filter_current_issue,
+    filter_human_gate_issue,
+    filter_all_issues_complete,
+    filter_snapshot_issue,
     is_human_gate_resolved,
-    get_all_issues_complete,
-    get_snapshot_issue,
 )
 from progress import (
     acquire_harness_lock,
@@ -72,12 +73,20 @@ async def _run_coding_loop(
             print("Re-run to continue.")
             return (0, True)
 
-        # Fetch the current issue from Linear
-        current_issue = await get_current_issue(project_id)
+        # Fetch all issues once per iteration (single API call)
+        try:
+            all_issues = await _get_all_issues(project_id)
+        except Exception as e:
+            logger.warning("Linear API error fetching issues: %s. Retrying next iteration.", e)
+            await asyncio.sleep(5)
+            continue
+
+        # Filter locally — no additional API calls
+        current_issue = filter_current_issue(all_issues)
 
         if current_issue is None:
             # All regular issues done — check for human gate
-            gate_issue = await get_human_gate_issue(project_id)
+            gate_issue = filter_human_gate_issue(all_issues)
             if gate_issue and gate_issue["state"]["type"] != "completed":
                 gate_id = gate_issue["id"]
                 set_human_gate(project_dir, gate_id)
@@ -87,11 +96,13 @@ async def _run_coding_loop(
                 return (0, True)
 
             # No more eligible issues — check if all complete
-            if await get_all_issues_complete(project_id):
+            if filter_all_issues_complete(all_issues):
                 # Run snapshot session before marking epic complete
-                snapshot_issue = await get_snapshot_issue(project_id)
+                snapshot_issue = filter_snapshot_issue(all_issues)
                 if snapshot_issue and snapshot_issue["state"]["type"] != "completed":
                     print(f"\n  Running Snapshot session for Epic {epic_number}...")
+                    shared_context_file = project_dir / "shared_context.md"
+                    context_mtime_before = shared_context_file.stat().st_mtime if shared_context_file.exists() else 0
                     snapshot_prompt = build_coding_agent_session_prompt(
                         project_dir, snapshot_issue, base_prompt
                     )
@@ -115,6 +126,19 @@ async def _run_coding_loop(
                         print(f"\n  ❌ {warning_msg}")
                         print(f"  Written to: {warning_file}")
                         return (epic_issues_resolved, True)
+                    # Verify shared_context.md was actually modified
+                    context_mtime_after = shared_context_file.stat().st_mtime if shared_context_file.exists() else 0
+                    if context_mtime_after <= context_mtime_before:
+                        logger.warning(
+                            "Snapshot session completed but shared_context.md was not updated. "
+                            "The agent may not have written architectural context."
+                        )
+                        warning_file = project_dir / "SNAPSHOT_FAILURE.txt"
+                        warning_file.write_text(
+                            "Snapshot session ran but shared_context.md was not modified. "
+                            "Review the snapshot session output and update shared_context.md manually."
+                        )
+                        print("\n  ⚠ Warning: shared_context.md was not updated by snapshot session.")
 
                 epic_issues_resolved = iteration - 1  # approximate
                 return (epic_issues_resolved, False)

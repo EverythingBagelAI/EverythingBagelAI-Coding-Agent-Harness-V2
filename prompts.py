@@ -193,6 +193,19 @@ def _wrap_context(filename: str, content: str) -> str:
     )
 
 
+def _validate_spec_file_path(spec_file: str, project_dir: Path) -> Path:
+    """Validate spec_file path is within project directory."""
+    resolved = (project_dir / spec_file).resolve()
+    try:
+        resolved.relative_to(project_dir.resolve())
+    except ValueError:
+        raise ValueError(
+            f"spec_file path '{spec_file}' resolves outside project directory. "
+            "This may indicate a tampered spec_index.json."
+        )
+    return resolved
+
+
 def build_epic_initializer_context(epic_number: int, project_dir: Path) -> str:
     """
     Build the full context string injected into the Epic Initializer's user message.
@@ -226,7 +239,7 @@ def build_epic_initializer_context(epic_number: int, project_dir: Path) -> str:
     sections.append(_wrap_context("epics/spec_index.md", spec_index))
 
     # 4. The specific epic spec
-    spec_file = project_dir / epic["spec_file"]
+    spec_file = _validate_spec_file_path(epic["spec_file"], project_dir)
     epic_spec = _read_file_or_note(spec_file, required=True)
     sections.append(_wrap_context(epic["spec_file"], epic_spec))
 
