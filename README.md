@@ -19,7 +19,7 @@ This harness turns a written spec into a working codebase by decomposing it into
 - **macOS or Linux** — Windows is not supported (relies on `fcntl` file locking)
 - **Python 3.11+**
 - **Node.js 18+**
-- **Claude Code CLI** (`claude --version`)
+- **Claude Code CLI** (`claude --version`) — run `claude setup-token` to generate a `CLAUDE_CODE_OAUTH_TOKEN`
 - A [Linear](https://linear.app) account with API access
 - An Anthropic API key (via Claude Code OAuth token)
 
@@ -101,7 +101,7 @@ cp templates/master_app_spec_template.md prompts/app_spec.txt
 python autonomous_agent_demo.py --project-dir ./my-project --mode greenfield
 ```
 
-In greenfield mode, relative `--project-dir` paths are placed inside a `generations/` subdirectory. Use an absolute path to bypass this.
+In greenfield mode, relative `--project-dir` paths are placed inside a `generations/` subdirectory. Use an absolute path to control placement exactly, e.g. `--project-dir /Users/you/projects/my-app`.
 
 **Brownfield** — extend an existing codebase:
 
@@ -127,7 +127,7 @@ Do not use the same project directory for V1 and V2 modes.
 
 ## Security Model
 
-The harness runs an allowlist-based security layer on all bash commands the agent executes. Only explicitly permitted commands run — everything else is blocked. Sensitive commands get additional validation: `git push` is blocked entirely (no code leaves without human review), file operations are restricted to relative paths within the project directory, `rm` blocks path traversal, and `pkill` is limited to dev-related processes. MCP tool access is scoped per session type so the architect, initialiser, and coding agents each see only the tools they need.
+The harness runs an allowlist-based security layer on all bash commands the agent executes. Only explicitly permitted commands run — everything else is blocked. Sensitive commands get additional validation: `git push` is blocked entirely (no code is pushed to remote repos without human review), file operations are restricted to relative paths within the project directory, `rm` blocks path traversal, and `pkill` is limited to dev-related processes. MCP tool access is scoped per session type so the architect, initialiser, and coding agents each see only the tools they need.
 
 ---
 
@@ -161,7 +161,7 @@ The harness runs an allowlist-based security layer on all bash commands the agen
 - **macOS/Linux only.** Windows is not supported due to `fcntl` file locking.
 - **V1 and V2 modes must not share a project directory.** They write different schemas to `.linear_project.json` and will conflict.
 - **`claude-progress.txt`** tracks epic state in your project directory. Do not commit it or edit it manually.
-- **Default model is Opus** (most capable but most expensive). Pass `--model claude-sonnet-4-5-20250929` to use a cheaper model.
+- **Default model is Opus** (most capable but most expensive). Pass `--model` to override, e.g. `--model claude-sonnet-4-5` for a cheaper option.
 - **`SNAPSHOT_FAILURE.txt`** appearing in your project directory means a snapshot session failed. Review and update `shared_context.md` manually before continuing.
 - **First run takes 10–20 minutes.** The initialiser is creating a Linear project and 15–30 issues. Watch for `[Tool: ...]` output — it is working.
 
