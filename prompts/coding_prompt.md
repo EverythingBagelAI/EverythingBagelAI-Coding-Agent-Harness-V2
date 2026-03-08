@@ -16,14 +16,26 @@ You are a coding agent working on one issue at a time within an epic. You have a
    npx playwright install chromium 2>/dev/null || true
    ```
 7. Run `init.sh` if it exists (`[ -f ./init.sh ] && ./init.sh`). Otherwise start the dev server in the background:
-   ```bash
-   npm run dev > /tmp/dev-server.log 2>&1 &
-   sleep 3 && curl -s http://localhost:3000 > /dev/null || sleep 5
-   echo "Dev server PID: $!"
-   ```
+   - If this is a Node.js project (package.json exists):
+     ```bash
+     npm run dev > /tmp/dev-server.log 2>&1 &
+     sleep 3 && curl -s http://localhost:3000 > /dev/null || sleep 5
+     echo "Dev server PID: $!"
+     ```
+   - If this is a Python project (manage.py, main.py, or app.py exists):
+     ```bash
+     python main.py > /tmp/dev-server.log 2>&1 &   # or uvicorn/gunicorn as appropriate
+     sleep 3
+     echo "Dev server PID: $!"
+     ```
+   - If neither applies, skip this step.
 8. Install backend test dependencies (safe to run even if already installed):
    `pip install pytest httpx pytest-asyncio 2>/dev/null || true`
 9. Run baseline Playwright tests if any test files exist (`ls e2e/ 2>/dev/null || ls tests/ 2>/dev/null`). Skip this step if no test files are found.
+   If baseline tests fail and the failures appear to be pre-existing (not caused by
+   your current issue), note the failures in a comment and proceed to your assigned
+   issue. Do not spend more than 10 minutes attempting to fix inherited test failures
+   — that is a separate issue to be logged.
 
 If the app is broken when you start, fix the breakage before implementing anything new. Commit the fix separately.
 
@@ -38,6 +50,12 @@ For each issue:
 3. **Test with Playwright** — use the e2e testing skill at `.claude/skills/e2e-test/SKILL.md`. Run the tests. If tests fail, fix the code (not the tests). Only mark an issue Done after tests pass.
 
 4. **Commit** — `git add -A && git commit -m "feat: [issue title] — [one line description]"`
+   If git commit fails:
+   1. Read the error message carefully
+   2. Common causes: nothing staged (run git add -A first), merge conflict,
+      pre-commit hook failure
+   3. Fix the cause and retry
+   4. Do NOT mark the issue Done until git commit has succeeded
 
 5. **Update Linear** — mark the issue Done. Add a comment with: what was implemented, any decisions made, any deviation from the issue description.
 
@@ -97,6 +115,10 @@ Use the skill at `.claude/skills/api-test/SKILL.md` for all backend testing.
 - Backend-only issue: API tests only
 - Frontend-only issue: Playwright only
 - Full-stack issue: both
+
+For issues that don't involve UI or API changes (config, refactoring, migrations,
+schema changes): run the full existing test suite as your verification step.
+If no test suite exists, document what you verified manually in your commit message.
 
 ## The Snapshot Issue
 

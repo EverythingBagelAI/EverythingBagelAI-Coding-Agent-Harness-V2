@@ -17,11 +17,11 @@ before proceeding.
 Before creating issues, you need to set up Linear:
 
 1. **Get the team ID:**
-   Use `mcp__linear__list_teams` to see available teams.
+   Use `mcp__linear__linear_list_teams` to see available teams.
    Note the team ID (e.g., "TEAM-123") for the team where you'll create issues.
 
 2. **Create a Linear project:**
-   Use `mcp__linear__create_project` to create a new project:
+   Use `mcp__linear__linear_create_project` to create a new project:
    - `name`: Use the project name from app_spec.txt (e.g., "Claude.ai Clone")
    - `teamIds`: Array with your team ID
    - `description`: Brief project overview from app_spec.txt
@@ -31,7 +31,7 @@ Before creating issues, you need to set up Linear:
 ### CRITICAL TASK: Create Linear Issues
 
 Based on `app_spec.txt`, create Linear issues for each feature using the
-`mcp__linear__create_issue` tool.
+`mcp__linear__linear_create_issue` tool.
 
 **IMPORTANT: Analyze the specification and determine the appropriate number of issues.**
 

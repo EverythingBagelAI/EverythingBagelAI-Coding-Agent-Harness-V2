@@ -9,9 +9,7 @@ the agent is responsible for reasoning and implementation only.
 
 import asyncio
 import logging
-import os
 import shutil
-import time
 from pathlib import Path
 from typing import Optional
 
@@ -43,22 +41,7 @@ from prompts import get_coding_prompt, build_coding_agent_session_prompt
 from security import configure_allowed_commands
 
 MAX_ISSUE_RETRIES = 3
-
-
-def _linear_call_with_retry(fn, *args, max_attempts=3, **kwargs):
-    """Call a linear_client function with retry on transient errors."""
-    for attempt in range(max_attempts):
-        try:
-            return fn(*args, **kwargs)
-        except Exception as e:
-            if attempt == max_attempts - 1:
-                raise
-            wait = 2 ** attempt
-            logger.warning(
-                "Linear API call failed (attempt %d/%d): %s. Retrying in %ds...",
-                attempt + 1, max_attempts, e, wait,
-            )
-            time.sleep(wait)
+MAX_NO_ISSUE_RETRIES = 50
 
 
 async def _run_coding_loop(
@@ -80,7 +63,6 @@ async def _run_coding_loop(
     epic_issues_resolved = 0
     issue_retry_counts: dict[str, int] = {}
     no_issue_retry_count = 0
-    MAX_NO_ISSUE_RETRIES = 50
 
     while True:
         iteration += 1
@@ -91,11 +73,11 @@ async def _run_coding_loop(
             return (0, True)
 
         # Fetch the current issue from Linear
-        current_issue = _linear_call_with_retry(get_current_issue, project_id)
+        current_issue = await get_current_issue(project_id)
 
         if current_issue is None:
             # All regular issues done — check for human gate
-            gate_issue = _linear_call_with_retry(get_human_gate_issue, project_id)
+            gate_issue = await get_human_gate_issue(project_id)
             if gate_issue and gate_issue["state"]["type"] != "completed":
                 gate_id = gate_issue["id"]
                 set_human_gate(project_dir, gate_id)
@@ -105,9 +87,9 @@ async def _run_coding_loop(
                 return (0, True)
 
             # No more eligible issues — check if all complete
-            if _linear_call_with_retry(get_all_issues_complete, project_id):
+            if await get_all_issues_complete(project_id):
                 # Run snapshot session before marking epic complete
-                snapshot_issue = _linear_call_with_retry(get_snapshot_issue, project_id)
+                snapshot_issue = await get_snapshot_issue(project_id)
                 if snapshot_issue and snapshot_issue["state"]["type"] != "completed":
                     print(f"\n  Running Snapshot session for Epic {epic_number}...")
                     snapshot_prompt = build_coding_agent_session_prompt(
@@ -119,11 +101,20 @@ async def _run_coding_loop(
                     )
                     async with snapshot_client:
                         snap_status, snap_response = await run_agent_session_with_timeout(snapshot_client, snapshot_prompt, project_dir)
-                    if snap_status == "error":
-                        print(
-                            f"\n  Warning: Snapshot session for epic {epic_number} failed. "
-                            "shared_context.md may be stale. Check logs and re-run if needed."
+                    snapshot_success = snap_status != "error"
+                    if not snapshot_success:
+                        warning_msg = (
+                            f"SNAPSHOT FAILED for epic {epic_number}. "
+                            "shared_context.md was not updated. "
+                            "Subsequent epics may build on stale context. "
+                            "Re-run this epic or manually update shared_context.md before continuing."
                         )
+                        logger.error(warning_msg)
+                        warning_file = project_dir / "SNAPSHOT_FAILURE.txt"
+                        warning_file.write_text(warning_msg)
+                        print(f"\n  ❌ {warning_msg}")
+                        print(f"  Written to: {warning_file}")
+                        return (epic_issues_resolved, True)
 
                 epic_issues_resolved = iteration - 1  # approximate
                 return (epic_issues_resolved, False)
@@ -132,7 +123,7 @@ async def _run_coding_loop(
                 no_issue_retry_count += 1
                 if no_issue_retry_count > MAX_NO_ISSUE_RETRIES:
                     print(f"\n  No eligible issues found after {MAX_NO_ISSUE_RETRIES} attempts.")
-                    print("  Check Linear for stuck issues or run with --verbose for details.")
+                    print("  Check Linear directly for stuck or blocked issues.")
                     return (0, True)
                 print("  No eligible issues found but epic not complete. Retrying...")
                 await asyncio.sleep(AUTO_CONTINUE_DELAY_SECONDS)
@@ -236,7 +227,7 @@ async def run_epic_mode(
     gate_id = get_human_gate_issue_id(project_dir)
     if gate_id:
         try:
-            if not _linear_call_with_retry(is_human_gate_resolved, gate_id):
+            if not await is_human_gate_resolved(gate_id):
                 _print_human_gate_pause(gate_id, project_dir)
                 return
             else:

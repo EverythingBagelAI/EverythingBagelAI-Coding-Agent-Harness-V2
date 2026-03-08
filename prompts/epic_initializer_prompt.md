@@ -2,9 +2,10 @@
 
 You are initialising one epic of a multi-epic project. Your job is to read the epic spec assigned to you and create a well-structured set of Linear issues that a coding agent can execute one at a time.
 
-## Context Files to Read First (in this order)
+## Context Files (Injected Below)
 
-Before creating any Linear issues, read these files:
+The following context files have been injected into this message below by the harness.
+Review the injected content before creating issues — do not re-read the files using tools.
 
 1. `shared_context.md` — cross-epic design system, data model, API contracts, anti-patterns
 2. `build_deviations.md` — deviations from the original spec made by previous epics (if file exists)
@@ -44,7 +45,7 @@ Create issues in this order:
 
 ### Example 1: Feature Issue
 
-Tool: `mcp__linear__create_issue`
+Tool: `mcp__linear__linear_create_issue`
 Input:
 title: "Implement user authentication with Clerk"
 description: |
@@ -65,7 +66,7 @@ labelNames: ["feature", "auth"]
 
 ### Example 2: Setup Issue
 
-Tool: `mcp__linear__create_issue`
+Tool: `mcp__linear__linear_create_issue`
 Input:
 title: "Epic 1 setup — install dependencies and verify baseline"
 description: |
@@ -84,7 +85,7 @@ labelNames: ["setup"]
 
 ### Example 3: Human Gate Issue
 
-Tool: `mcp__linear__create_issue`
+Tool: `mcp__linear__linear_create_issue`
 Input:
 title: "[HUMAN GATE] Setup required before Epic 2 can proceed"
 description: |

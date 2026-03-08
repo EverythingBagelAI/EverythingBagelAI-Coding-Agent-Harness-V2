@@ -6,7 +6,6 @@ Functions for creating and configuring the Claude Agent SDK client.
 Dynamically builds configuration from the discovered ecosystem.
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 

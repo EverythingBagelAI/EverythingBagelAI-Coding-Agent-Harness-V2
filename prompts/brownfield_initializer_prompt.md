@@ -54,11 +54,11 @@ what needs to be added or changed, not the entire application.
 Before creating issues, set up Linear:
 
 1. **Get the team ID:**
-   Use `mcp__linear__list_teams` to see available teams.
+   Use `mcp__linear__linear_list_teams` to see available teams.
    Note the team ID for the team where you'll create issues.
 
 2. **Create a Linear project:**
-   Use `mcp__linear__create_project` to create a new project:
+   Use `mcp__linear__linear_create_project` to create a new project:
    - `name`: Use the project name from app_spec.txt
    - `teamIds`: Array with your team ID
    - `description`: Brief overview noting this is brownfield work on an existing codebase
@@ -68,7 +68,7 @@ Before creating issues, set up Linear:
 ### CRITICAL TASK: Create Linear Issues
 
 Based on `app_spec.txt` AND your analysis of the existing codebase, create Linear
-issues using `mcp__linear__create_issue`.
+issues using `mcp__linear__linear_create_issue`.
 
 **Brownfield-specific guidelines:**
 

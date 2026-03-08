@@ -18,7 +18,7 @@ import os
 import sys
 from pathlib import Path
 
-from agent import run_agent_session
+from agent import run_agent_session_with_timeout
 from client import create_client
 from discovery import discover_user_ecosystem, print_discovery_summary
 from config import DEFAULT_MODEL
@@ -165,7 +165,12 @@ async def generate_epics(spec_path: Path, model: str, project_dir: Path) -> None
 
     # Run the agent session
     async with client:
-        status, response = await run_agent_session(client, task_message, project_dir)
+        status, response = await run_agent_session_with_timeout(
+            client=client,
+            message=task_message,
+            project_dir=project_dir,
+            timeout=int(os.environ.get("HARNESS_ARCHITECT_TIMEOUT", 3600)),
+        )
 
     if status == "error":
         print(f"\nArchitect Agent encountered an error: {response}")

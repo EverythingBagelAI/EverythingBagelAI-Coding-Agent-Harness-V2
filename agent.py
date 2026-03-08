@@ -144,16 +144,18 @@ async def run_agent_session_with_timeout(
     client,
     message: str,
     project_dir: Path,
+    timeout: int | None = None,
 ) -> tuple[str, str]:
     """Wrap run_agent_session with a configurable timeout."""
+    effective_timeout = timeout if timeout is not None else SESSION_TIMEOUT_SECONDS
     try:
         return await asyncio.wait_for(
             run_agent_session(client, message, project_dir),
-            timeout=SESSION_TIMEOUT_SECONDS,
+            timeout=effective_timeout,
         )
     except asyncio.TimeoutError:
         print(
-            f"\n  Agent session timed out after {SESSION_TIMEOUT_SECONDS // 60} minutes. "
+            f"\n  Agent session timed out after {effective_timeout // 60} minutes. "
             "The issue may be too complex or the agent is stuck."
         )
         return "error", "Session timed out"
@@ -313,6 +315,8 @@ async def run_autonomous_agent(
     iteration = 0
     consecutive_errors = 0
     MAX_CONSECUTIVE_ERRORS = 5
+    no_progress_count = 0
+    MAX_NO_PROGRESS_ITERATIONS = 20
 
     while True:
         iteration += 1
@@ -358,7 +362,7 @@ async def run_autonomous_agent(
         if _project_id:
             try:
                 from linear_client import get_all_issues_complete
-                _complete = get_all_issues_complete(_project_id)
+                _complete = await get_all_issues_complete(_project_id)
             except Exception:
                 _complete = (_state or {}).get("app_complete", False) is True
         if _complete:
@@ -368,6 +372,17 @@ async def run_autonomous_agent(
             print("\nAll non-META Linear issues are Done.")
             print_progress_summary(project_dir)
             break
+
+        # Track progress — reset on completion or error handling, increment on continue-without-completion
+        if status == "continue" and not _complete:
+            no_progress_count += 1
+            if no_progress_count >= MAX_NO_PROGRESS_ITERATIONS:
+                print(f"\n  No progress detected after {MAX_NO_PROGRESS_ITERATIONS} iterations.")
+                print("  Stopping to prevent runaway credit consumption.")
+                print("  Check Linear for stuck issues.")
+                return
+        else:
+            no_progress_count = 0
 
         # Handle status
         if status == "continue":

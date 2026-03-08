@@ -45,6 +45,7 @@ Optional:
 - `REF_API_KEY` — Used to pre-fetch library documentation for the coding agent. Get one at https://ref.tools. If absent, the harness runs without doc pre-fetching.
   Without caching, Ref API calls are made fresh every session. On long epic runs this may hit rate limits.
 - `HARNESS_SESSION_TIMEOUT` — Maximum time in seconds for a single agent session (default: 1800 = 30 minutes). Increase for complex issues.
+- `HARNESS_ARCHITECT_TIMEOUT` — Maximum time in seconds for the architect session in `generate_epics.py` (default: 3600 = 60 minutes). The architect legitimately needs more time than coding sessions.
 
 MCP servers (add once via Claude Code CLI, auto-discovered by harness):
 

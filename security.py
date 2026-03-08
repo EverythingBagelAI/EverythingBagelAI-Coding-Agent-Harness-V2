@@ -416,6 +416,9 @@ def validate_init_script(command_string: str) -> tuple[bool, str]:
     # The command should be exactly ./init.sh (possibly with arguments)
     script = tokens[0]
 
+    if ".." in script:
+        return False, "Path traversal (..) is not permitted in init script path"
+
     # Allow ./init.sh or paths ending in /init.sh
     if script == "./init.sh" or script.endswith("/init.sh"):
         return True, ""
@@ -463,7 +466,7 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
         return {}
 
     # Block subshell syntax that could bypass the allowlist
-    SUBSHELL_PATTERNS = ["`", "$(", "<("]
+    SUBSHELL_PATTERNS = ["`", "$(", "<(", ">("]
     for pattern in SUBSHELL_PATTERNS:
         if pattern in command:
             return {

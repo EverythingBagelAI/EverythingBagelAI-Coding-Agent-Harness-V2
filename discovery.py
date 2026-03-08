@@ -842,7 +842,3 @@ def print_discovery_summary(ecosystem: EcosystemInfo) -> None:
         print(f"  Config Files Missing: {', '.join(ecosystem.config_files_missing)}")
 
     print("\n" + "=" * 70 + "\n")
-
-
-# Alias for backward compatibility and verification scripts
-discover_mcps = discover_user_ecosystem
