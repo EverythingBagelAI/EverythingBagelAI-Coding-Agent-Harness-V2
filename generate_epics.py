@@ -14,6 +14,7 @@ Usage:
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -174,6 +175,63 @@ async def generate_epics(spec_path: Path, model: str, project_dir: Path) -> None
 
     if status == "error":
         print(f"\nArchitect Agent encountered an error: {response}")
+        sys.exit(1)
+
+    # ------------------------------------------------------------------
+    # Post-generation validation
+    # ------------------------------------------------------------------
+    EXPECTED_ARCHITECT_OUTPUTS = [
+        "epics/spec_index.json",
+        "epics/spec_index.md",
+        "shared_context.md",
+    ]
+
+    missing = [f for f in EXPECTED_ARCHITECT_OUTPUTS if not (project_dir / f).exists()]
+
+    # If spec_index.json exists, also validate it is parseable and that
+    # every referenced epic spec file is present on disk.
+    spec_index_path = project_dir / "epics" / "spec_index.json"
+    epic_file_errors: list[str] = []
+    if spec_index_path.exists():
+        try:
+            index_data = json.loads(spec_index_path.read_text())
+            if not isinstance(index_data, list) or len(index_data) == 0:
+                epic_file_errors.append(
+                    "spec_index.json is empty or not a JSON array"
+                )
+            else:
+                for entry in index_data:
+                    spec_file = entry.get("spec_file")
+                    if not spec_file:
+                        epic_file_errors.append(
+                            f"Epic {entry.get('number', '?')} is missing the "
+                            "'spec_file' key in spec_index.json"
+                        )
+                    elif not (project_dir / spec_file).exists():
+                        epic_file_errors.append(
+                            f"Epic spec file referenced in spec_index.json "
+                            f"not found: {spec_file}"
+                        )
+        except json.JSONDecodeError as exc:
+            epic_file_errors.append(
+                f"spec_index.json is not valid JSON: {exc}"
+            )
+
+    if missing or epic_file_errors:
+        print("\n" + "=" * 70)
+        print("  ARCHITECT OUTPUT VALIDATION FAILED")
+        print("=" * 70)
+        if missing:
+            print("\n  Architect agent completed but did not produce expected files:")
+            for f in missing:
+                print(f"     - {f}")
+        if epic_file_errors:
+            print("\n  Epic spec file errors:")
+            for err in epic_file_errors:
+                print(f"     - {err}")
+        print()
+        print("  Check the architect session output above for errors.")
+        print("  Re-run generate_epics.py to retry, or create these files manually.")
         sys.exit(1)
 
     # Success message

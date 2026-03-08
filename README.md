@@ -50,8 +50,9 @@ Optional:
 MCP servers (add once via Claude Code CLI, auto-discovered by harness):
 
 ```bash
-# Linear — OAuth, run once then authenticate in Claude Code
-claude mcp add linear --transport http https://mcp.linear.app/mcp
+# Linear — the harness uses LINEAR_API_KEY to authenticate with Linear directly.
+# You do not need to set up Linear OAuth or the Linear MCP server manually —
+# the harness configures the Linear MCP connection automatically using your API key.
 
 # Ref — documentation lookup (get key from ref.tools)
 claude mcp add ref --transport http https://api.ref.tools/mcp \
@@ -80,6 +81,7 @@ cd EverythingBagelAI-Coding-Agent-Harness-V2
 # 2. Install Python dependencies
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
+pip install -r requirements-dev.txt   # pytest for running tests
 # Note: claude-agent-sdk is the Anthropic Claude Agent SDK.
 # If pip cannot find it, install from: pip install claude-agent-sdk
 
@@ -201,6 +203,8 @@ After running `generate_epics.py`, **review the epics before running the harness
 │
 └── .claude/
     └── skills/
+        ├── api-test/
+        │   └── SKILL.md          # API testing skill (pytest + httpx)
         └── e2e-test/
             └── SKILL.md          # Playwright testing skill (plan → write → heal)
 ```

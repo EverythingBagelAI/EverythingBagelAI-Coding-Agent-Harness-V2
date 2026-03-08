@@ -40,7 +40,7 @@ _DEFAULT_ALLOWED_COMMANDS: set[str] = {
 _allowed_commands: set[str] = set(_DEFAULT_ALLOWED_COMMANDS)
 
 # Commands that need additional validation even when in the allowlist
-COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh", "rm", "git", "mv", "cp", "sed", "awk", "export"}
+COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh", "rm", "git", "mv", "cp", "sed", "awk", "export", "cat", "head", "tail", "grep", "find"}
 
 
 def configure_allowed_commands(commands: set[str]) -> None:
@@ -378,6 +378,33 @@ def validate_file_command_paths(command_string: str) -> tuple[bool, str]:
     return True, ""
 
 
+def validate_read_command(command_string: str) -> tuple[bool, str]:
+    """
+    Validate file-reading commands — block reads outside project directory.
+    Allows relative paths. Blocks absolute paths, traversal, and home dir refs.
+    Used for cat, head, tail, grep, find.
+    """
+    try:
+        tokens = shlex.split(command_string)
+    except ValueError:
+        return False, "Could not parse command"
+
+    for token in tokens[1:]:
+        if token.startswith("-"):
+            continue
+        # Allow stdin placeholder
+        if token == "-":
+            continue
+        if token.startswith("/"):
+            return False, f"Absolute paths are not permitted in read commands: {token}"
+        if ".." in token:
+            return False, f"Path traversal (..) is not permitted: {token}"
+        if token.startswith("~"):
+            return False, f"Home directory paths are not permitted: {token}"
+
+    return True, ""
+
+
 def validate_export_command(command_string: str) -> tuple[bool, str]:
     """Validate export — block overriding sensitive environment variables."""
     PROTECTED_VARS = {
@@ -525,6 +552,10 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
                         return {"decision": "block", "reason": reason}
                 elif cmd in ("mv", "cp", "sed", "awk"):
                     allowed, reason = validate_file_command_paths(segment)
+                    if not allowed:
+                        return {"decision": "block", "reason": reason}
+                elif cmd in ("cat", "head", "tail", "grep", "find"):
+                    allowed, reason = validate_read_command(segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
                 elif cmd == "export":

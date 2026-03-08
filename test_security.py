@@ -22,6 +22,7 @@ from security import (
     validate_rm_command,
     validate_git_command,
     validate_file_command_paths,
+    validate_read_command,
     validate_export_command,
     _DEFAULT_ALLOWED_COMMANDS,
 )
@@ -330,6 +331,69 @@ class TestValidateFileCommandPaths:
     def test_allows_relative(self):
         allowed, reason = validate_file_command_paths("mv file1.txt file2.txt")
         assert allowed
+
+
+# ---------------------------------------------------------------------------
+# export validation
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Read command validation (cat, head, tail, grep, find)
+# ---------------------------------------------------------------------------
+
+class TestValidateReadCommand:
+    @pytest.mark.parametrize("cmd", [
+        "cat ./src/index.ts",
+        "cat README.md",
+        "cat src/components/App.tsx",
+        "head -100 file.txt",
+        "tail -20 log.txt",
+        "grep -r 'TODO' ./src",
+        "grep -rn pattern src/",
+        "grep pattern file.txt",
+        "find . -name '*.py'",
+        "find ./src -type f -name '*.ts'",
+        "cat -",
+    ])
+    def test_allowed(self, cmd):
+        allowed, reason = validate_read_command(cmd)
+        assert allowed, f"Expected allowed: {cmd} — {reason}"
+
+    @pytest.mark.parametrize("cmd", [
+        "cat /etc/passwd",
+        "cat ~/.ssh/id_rsa",
+        "cat ../../secret.txt",
+        "head /etc/shadow",
+        "tail ~/.claude.json",
+        "grep -r 'key' ~/.ssh",
+        "grep -r pattern /etc/",
+        "find / -name '*.key'",
+        "find /etc -type f",
+        "cat ~/.bashrc",
+        "head -n 10 /var/log/syslog",
+        "find ../.. -name '*.env'",
+    ])
+    def test_blocked(self, cmd):
+        allowed, reason = validate_read_command(cmd)
+        assert not allowed, f"Expected blocked: {cmd}"
+
+    def test_blocked_via_hook_cat(self):
+        assert is_blocked("cat /etc/passwd")
+
+    def test_blocked_via_hook_grep(self):
+        assert is_blocked("grep -r key ~/.ssh")
+
+    def test_blocked_via_hook_find(self):
+        assert is_blocked("find / -name '*.key'")
+
+    def test_allowed_via_hook_cat(self):
+        assert not is_blocked("cat ./src/index.ts")
+
+    def test_allowed_via_hook_grep(self):
+        assert not is_blocked("grep -r 'TODO' ./src")
+
+    def test_allowed_via_hook_find(self):
+        assert not is_blocked("find . -name '*.py'")
 
 
 # ---------------------------------------------------------------------------

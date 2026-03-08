@@ -28,13 +28,15 @@ export default defineConfig({
   timeout: 30000,
   retries: 1,
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: process.env.BASE_URL || "http://localhost:3000", // override with BASE_URL env var
     headless: true,
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
 });
 ```
+
+> **Note:** Set `BASE_URL` to match your dev server port (Vite: 5173, FastAPI: 8000, Next.js: 3000).
 
 ## The Four-Phase Testing Approach
 

@@ -317,6 +317,7 @@ async def run_autonomous_agent(
     MAX_CONSECUTIVE_ERRORS = 5
     no_progress_count = 0
     MAX_NO_PROGRESS_ITERATIONS = 20
+    completed_count_last = 0
 
     while True:
         iteration += 1
@@ -346,6 +347,17 @@ async def run_autonomous_agent(
                 prompt = get_initializer_prompt()
         else:
             prompt = get_coding_prompt()
+            # Inject Linear project ID so the agent scopes issue searches correctly
+            _std_state = load_linear_project_state(project_dir)
+            _std_project_id = _std_state.get("project_id") if _std_state else None
+            if _std_project_id:
+                prompt += (
+                    "\n\n---\n\n"
+                    "## Linear Project Scope\n\n"
+                    f"Linear Project ID: {_std_project_id}\n"
+                    "When searching for issues, filter to this project only. "
+                    "Do not work on issues from other projects."
+                )
 
         # Run session with async context manager
         async with client:
@@ -359,10 +371,16 @@ async def run_autonomous_agent(
         _state = load_linear_project_state(project_dir)
         _project_id = _state.get("project_id") if _state else None
         _complete = False
+        _completed_count_now = 0
         if _project_id:
             try:
-                from linear_client import get_all_issues_complete
-                _complete = await get_all_issues_complete(_project_id)
+                from linear_client import _get_all_issues, filter_all_issues_complete
+                _all_issues = await _get_all_issues(_project_id)
+                _complete = filter_all_issues_complete(_all_issues)
+                _completed_count_now = len([
+                    i for i in _all_issues
+                    if i.get("state", {}).get("type", "") in ("completed", "cancelled")
+                ])
             except Exception:
                 _complete = (_state or {}).get("app_complete", False) is True
         if _complete:
@@ -373,16 +391,21 @@ async def run_autonomous_agent(
             print_progress_summary(project_dir)
             break
 
-        # Track progress — reset on completion or error handling, increment on continue-without-completion
-        if status == "continue" and not _complete:
-            no_progress_count += 1
+        # Track progress — reset when completed issue count increases, increment otherwise
+        if status == "continue":
+            if _completed_count_now > completed_count_last:
+                no_progress_count = 0
+                completed_count_last = _completed_count_now
+            else:
+                no_progress_count += 1
             if no_progress_count >= MAX_NO_PROGRESS_ITERATIONS:
                 print(f"\n  No progress detected after {MAX_NO_PROGRESS_ITERATIONS} iterations.")
                 print("  Stopping to prevent runaway credit consumption.")
                 print("  Check Linear for stuck issues.")
                 return
-        else:
-            no_progress_count = 0
+        elif status == "error":
+            # Don't increment no_progress_count on errors — consecutive_errors handles that
+            pass
 
         # Handle status
         if status == "continue":

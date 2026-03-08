@@ -18,6 +18,7 @@ MAX_RETRIES = 3
 
 HUMAN_GATE_MARKER = "[HUMAN GATE]"
 SNAPSHOT_MARKER = "[SNAPSHOT]"
+META_MARKER = "[META]"
 
 
 def _parse_retry_after(headers, fallback: int) -> int:
@@ -124,7 +125,12 @@ def filter_current_issue(issues: list[dict]) -> Optional[dict]:
     eligible = []
     for issue in issues:
         title = issue["title"]
-        if title.upper().startswith(HUMAN_GATE_MARKER) or title.upper().startswith(SNAPSHOT_MARKER):
+        title_upper = title.upper()
+        if (
+            title_upper.startswith(HUMAN_GATE_MARKER)
+            or title_upper.startswith(SNAPSHOT_MARKER)
+            or title_upper.startswith(META_MARKER)
+        ):
             continue
         state_type = issue.get("state", {}).get("type", "")
         if state_type in ("completed", "cancelled"):
@@ -147,8 +153,12 @@ def filter_all_issues_complete(issues: list[dict]) -> bool:
     if not issues:
         return False
     for issue in issues:
-        title = issue["title"]
-        if title.upper().startswith(HUMAN_GATE_MARKER) or title.upper().startswith(SNAPSHOT_MARKER):
+        title_upper = issue["title"].upper()
+        if (
+            title_upper.startswith(HUMAN_GATE_MARKER)
+            or title_upper.startswith(SNAPSHOT_MARKER)
+            or title_upper.startswith(META_MARKER)
+        ):
             continue
         if issue.get("state", {}).get("type", "") not in ("completed", "cancelled"):
             return False
