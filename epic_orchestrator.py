@@ -235,7 +235,7 @@ async def run_epic_mode(
         print(f"  Copied static skill files to {skills_dst}")
 
     # Generate project-specific skills from detected tech stack
-    from skills import generate_project_skills
+    from skills import detect_tech_stack, generate_library_skills, generate_project_skills
 
     spec_path = project_dir / "epics" / "spec_index.md"
     if not spec_path.exists():
@@ -245,9 +245,14 @@ async def run_epic_mode(
     if shared_ctx_path.exists():
         _spec_text += "\n" + shared_ctx_path.read_text()
 
-    generated = generate_project_skills(project_dir, _spec_text, mode="greenfield", is_epic=True)
+    stack = detect_tech_stack(_spec_text, project_dir, mode="greenfield")
+    generated = generate_project_skills(project_dir, _spec_text, mode="greenfield", is_epic=True, stack=stack)
     if generated:
         print(f"  Generated {len(generated)} project-specific skill(s): {', '.join(generated)}")
+
+    lib_generated = generate_library_skills(project_dir, stack)
+    if lib_generated:
+        print(f"  Generated {len(lib_generated)} library documentation skill(s): {', '.join(lib_generated)}")
 
     # --- Dynamic Ecosystem Discovery ---
     from linear_config import get_linear_api_key
