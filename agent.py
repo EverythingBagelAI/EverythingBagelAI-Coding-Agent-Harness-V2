@@ -307,6 +307,13 @@ async def run_autonomous_agent(
             print()
             # Copy the app spec into the project directory for the agent to read
             copy_spec_to_project(project_dir)
+        # Generate project-specific skills on first run
+        from skills import generate_project_skills
+
+        spec_text = (project_dir / "app_spec.txt").read_text() if (project_dir / "app_spec.txt").exists() else ""
+        generated = generate_project_skills(project_dir, spec_text, mode=mode)
+        if generated:
+            print(f"  Generated {len(generated)} project-specific skill(s): {', '.join(generated)}")
     else:
         print("Continuing existing project (Linear initialised)")
         print_progress_summary(project_dir)

@@ -220,15 +220,34 @@ async def run_epic_mode(
     # Acquire harness lock — prevents two instances from running on the same project
     _lock_fd = acquire_harness_lock(project_dir)  # noqa: F841 — prevent GC releasing the lock
 
-    # Copy skill files into project so agent can access them from project CWD
+    # Copy static harness skills (e2e-test, api-test) into project
     skills_src = Path(__file__).parent / ".claude" / "skills"
     skills_dst = project_dir / ".claude" / "skills"
     if skills_src.exists():
-        if skills_dst.exists():
-            shutil.rmtree(skills_dst)
-        shutil.copytree(skills_src, skills_dst)
-        # Copies all skills (e2e-test, api-test, etc.) into the project, overwriting stale versions
-        print(f"  Copied skill files to {skills_dst}")
+        skills_dst.mkdir(parents=True, exist_ok=True)
+        for skill_name in ("e2e-test", "api-test"):
+            src = skills_src / skill_name
+            dst = skills_dst / skill_name
+            if src.exists():
+                if dst.exists():
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+        print(f"  Copied static skill files to {skills_dst}")
+
+    # Generate project-specific skills from detected tech stack
+    from skills import generate_project_skills
+
+    spec_path = project_dir / "epics" / "spec_index.md"
+    if not spec_path.exists():
+        spec_path = project_dir / "app_spec.txt"
+    _spec_text = spec_path.read_text() if spec_path.exists() else ""
+    shared_ctx_path = project_dir / "shared_context.md"
+    if shared_ctx_path.exists():
+        _spec_text += "\n" + shared_ctx_path.read_text()
+
+    generated = generate_project_skills(project_dir, _spec_text, mode="greenfield", is_epic=True)
+    if generated:
+        print(f"  Generated {len(generated)} project-specific skill(s): {', '.join(generated)}")
 
     # --- Dynamic Ecosystem Discovery ---
     from linear_config import get_linear_api_key
