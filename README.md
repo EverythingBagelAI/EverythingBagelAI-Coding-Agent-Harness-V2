@@ -12,6 +12,8 @@ This harness turns a written spec into a working codebase by decomposing it into
 
 **V2 mode (Epic)** is a multi-stage pipeline for larger projects. It uses a two-stage epic generation process: first, an Architect agent reads your master spec and produces an enriched epic index with detailed briefs for each epic. Then, separate Spec Writer agents — one per epic, each in a fresh 200K context window — expand those briefs into full epic sub-specs. Because each writer sees all previously completed specs, later epics build consistently on earlier architectural decisions without context window saturation. The harness then works through epics sequentially: an Epic Initialiser creates Linear issues from the sub-spec, a coding agent resolves them one per session, and a snapshot session updates `shared_context.md` with the current architectural state before moving to the next epic. Human gate issues pause execution for manual setup (API keys, OAuth apps, DNS) and resume when you mark them done in Linear.
 
+**Both modes** automatically detect the project's tech stack (from the spec and, in brownfield, from existing config files) and generate project-specific Claude Code skills before the first coding session. This gives the agent stack-aware test commands, code review checklists, deployment checks, and workflow guidance without manual configuration.
+
 ---
 
 ## Prerequisites
@@ -128,7 +130,15 @@ Do not use the same project directory for V1 and V2 modes.
 
 **Human gates** are issues titled `[HUMAN GATE] ...` that pause the harness until manually resolved in Linear. The Architect agent creates these at epic boundaries where external setup is needed (API keys, third-party accounts, DNS configuration). The gate description includes a checklist of exactly what to do.
 
-**Skills** are reusable agent instructions in `.claude/skills/`. The harness copies these into your project at startup so the coding agent can reference them. Currently includes `e2e-test` (Playwright testing patterns) and `api-test` (pytest + httpx patterns).
+**Skills** are reusable agent instructions in `.claude/skills/`. The harness ships two static skills (`e2e-test` for Playwright, `api-test` for pytest + httpx) that are copied into every project. On top of these, the harness **dynamically generates five project-specific skills** based on the detected tech stack:
+
+- **test-runner** — exact test commands and patterns for the detected frameworks (e.g. Vitest + RTL for Next.js, pytest + httpx for FastAPI)
+- **code-review** — stack-aware review checklist covering framework-specific anti-patterns, auth, database, and integration checks
+- **project-reference** — pointers to the app spec, shared context, and build deviations so the agent can recall design intent
+- **deployment-check** — pre-deployment validation covering environment variables, build commands, and production-readiness checks for the specific stack
+- **linear-workflow** — project-specific Linear integration with issue lifecycle, snapshot handling, and human gate instructions
+
+Stack detection reads from the app spec text, and in brownfield mode also scans `package.json`, `requirements.txt`/`pyproject.toml`, and framework config files. Generated skills include a `<!-- generated-by: harness -->` marker — re-running the harness overwrites these but preserves any skills you've customised manually.
 
 ---
 
@@ -145,6 +155,7 @@ The harness runs an allowlist-based security layer on all bash commands the agen
 ├── generate_epics.py               # Two-stage epic generator (decomposition + per-epic writing)
 ├── epic_orchestrator.py            # Epic mode loop — gate checking, sessions, snapshots
 ├── agent.py                        # Agent session logic
+├── skills.py                       # Dynamic skill generation from detected tech stack
 ├── config.py                       # Model and timeout configuration
 ├── security.py                     # Bash command allowlist and validators
 ├── prompts/
@@ -153,8 +164,8 @@ The harness runs an allowlist-based security layer on all bash commands the agen
 │   ├── architect_prompt.md         # Instructions for the architect agent (Stage 1)
 │   └── epic_writer_prompt.md      # Instructions for per-epic spec writers (Stage 2)
 ├── .claude/skills/
-│   ├── e2e-test/SKILL.md           # Playwright E2E testing patterns
-│   └── api-test/SKILL.md           # API testing patterns (httpx + pytest)
+│   ├── e2e-test/SKILL.md           # Playwright E2E testing patterns (static)
+│   └── api-test/SKILL.md           # API testing patterns (static)
 ├── templates/
 │   ├── master_app_spec_template.md # Template for writing your app spec
 │   └── epic_spec_template.md       # Template for individual epic specs
@@ -179,5 +190,5 @@ The harness runs an allowlist-based security layer on all bash commands the agen
 
 ```bash
 pip install -r requirements-dev.txt
-pytest test_security.py
+pytest test_security.py test_skills.py
 ```
