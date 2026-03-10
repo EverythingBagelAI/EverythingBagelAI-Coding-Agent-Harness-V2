@@ -74,7 +74,9 @@ def create_client(
         allowed_tools.append(f"mcp__{server_name}__*")
 
     # Build harness instructions to append to Claude Code's preset system prompt
-    harness_instructions = system_prompt_override or build_dynamic_system_prompt(ecosystem, mode)
+    harness_instructions = system_prompt_override or build_dynamic_system_prompt(
+        ecosystem, mode, project_dir=project_dir
+    )
     system_prompt = {
         "type": "preset",
         "preset": "claude_code",

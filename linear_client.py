@@ -218,6 +218,67 @@ async def get_snapshot_issue(project_id: str) -> Optional[dict]:
     return filter_snapshot_issue(issues)
 
 
+async def _get_team_state_id(team_id: str, state_name: str) -> Optional[str]:
+    """Get a workflow state ID by name for a team."""
+    query = """
+    query GetWorkflowStates($teamId: String!) {
+        team(id: $teamId) {
+            states { nodes { id name type } }
+        }
+    }
+    """
+    data = await _query(query, {"teamId": team_id})
+    states = data.get("team", {}).get("states", {}).get("nodes", [])
+    for state in states:
+        if state["name"].lower() == state_name.lower():
+            return state["id"]
+    return None
+
+
+async def set_issue_in_progress(issue_id: str) -> bool:
+    """Set an issue's state to 'In Progress'. Returns True on success."""
+    # First get the issue's team ID
+    issue_query = """
+    query GetIssueTeam($id: String!) {
+        issue(id: $id) { team { id } }
+    }
+    """
+    data = await _query(issue_query, {"id": issue_id})
+    team_id = data.get("issue", {}).get("team", {}).get("id")
+    if not team_id:
+        return False
+
+    state_id = await _get_team_state_id(team_id, "In Progress")
+    if not state_id:
+        return False
+
+    mutation = """
+    mutation UpdateIssue($id: String!, $stateId: String!) {
+        issueUpdate(id: $id, input: { stateId: $stateId }) { success }
+    }
+    """
+    result = await _query(mutation, {"id": issue_id, "stateId": state_id})
+    return result.get("issueUpdate", {}).get("success", False)
+
+
+async def verify_all_issues_complete(project_id: str) -> tuple[bool, int, int]:
+    """
+    Verify with Linear API that ALL non-meta issues are completed.
+    Returns (all_complete, completed_count, total_count).
+    """
+    issues = await _get_all_issues(project_id)
+    total = 0
+    completed = 0
+    for issue in issues:
+        title_upper = issue["title"].upper()
+        if title_upper.startswith(META_MARKER):
+            continue
+        total += 1
+        if issue.get("state", {}).get("type", "") in ("completed", "cancelled"):
+            completed += 1
+    return (completed == total and total > 0, completed, total)
+
+
 async def get_all_issues_complete(project_id: str) -> bool:
     """
     Returns True if all non-gate, non-snapshot issues in the project

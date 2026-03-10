@@ -110,7 +110,7 @@ The `brief` field is your working notes for each epic. Be thorough — this is w
 spec writer agent will use to produce the full epic spec file. Include:
 
 - `purpose`: 2-3 sentences on what this epic achieves
-- `features`: array of atomic feature strings (each becomes a Linear issue). 8-40 items.
+- `features`: array of specific feature requirements. These describe WHAT to build — the Epic Initialiser decides how to group them into issues. Be thorough — list every distinct capability.
 - `data_model`: key entities and fields introduced/modified in this epic
 - `api_contracts`: endpoints created/consumed (method + path + description)
 - `integrations`: external services and MCP tools needed

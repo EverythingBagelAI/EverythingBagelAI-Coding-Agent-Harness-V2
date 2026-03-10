@@ -9,12 +9,7 @@ You are a coding agent working on one issue at a time within an epic. You have a
 3. Run `git log --oneline -10` to see recent commits
 4. Read `build_deviations.md` if it exists — understand what changed from the original plan. NOTE: In epic mode, this file's content has also been pre-injected below, but reading it directly ensures you see the latest version.
 5. **Pre-injected context (epic mode only):** `shared_context.md` and your current Linear issue have been injected into this prompt below by the harness. Do NOT read these files manually — use the injected content. In standard mode, read `shared_context.md` if it exists and use `mcp__linear__linear_search_issues` to find the highest-priority incomplete issue.
-6. For every epic's Setup issue, ensure Playwright is installed (idempotent — safe to re-run):
-   ```bash
-   npm install -D @playwright/test 2>/dev/null || true
-   npx playwright install chromium 2>/dev/null || true
-   ```
-7. Run `init.sh` if it exists (`[ -f ./init.sh ] && ./init.sh`). Otherwise start the dev server in the background:
+6. Run `init.sh` if it exists (`[ -f ./init.sh ] && ./init.sh`). Otherwise start the dev server in the background:
    - Check the framework config for the actual port:
      - Next.js/React: check package.json scripts or vite.config.js (default: 3000 or 5173)
      - FastAPI/uvicorn: check main.py or pyproject.toml (default: 8000)
@@ -32,13 +27,8 @@ You are a coding agent working on one issue at a time within an epic. You have a
      echo "Dev server PID: $!"
      ```
    - If neither applies, skip this step.
-8. Install backend test dependencies (safe to run even if already installed):
+7. Install backend test dependencies (safe to run even if already installed):
    `pip install pytest httpx pytest-asyncio 2>/dev/null || true`
-9. Run baseline Playwright tests if any test files exist (`ls e2e/ 2>/dev/null || ls tests/ 2>/dev/null`). Skip this step if no test files are found.
-   If baseline tests fail and the failures appear to be pre-existing (not caused by
-   your current issue), note the failures in a comment and proceed to your assigned
-   issue. Do not spend more than 10 minutes attempting to fix inherited test failures
-   — that is a separate issue to be logged.
 
 If the app is broken when you start, spend no more than 15 minutes attempting to fix the breakage before implementing anything new. If unresolved after 15 minutes, document the breakage in a comment, log it as a separate Linear issue if appropriate, and proceed with your assigned work. Commit any fix separately.
 
@@ -50,7 +40,7 @@ For each issue:
 
 2. **Implement** — write clean, typed code. Follow the patterns already established in the codebase. Check `shared_context.md` for the design system and existing patterns before creating new components or utilities.
 
-3. **Test with Playwright** — use the e2e testing skill at `.claude/skills/e2e-test/SKILL.md`. Run the tests. If tests fail, fix the code (not the tests). Only mark an issue Done after tests pass.
+3. **Verify build** — run `npm run build` to catch TypeScript errors and import issues. Only mark an issue Done after the build passes. See "Testing Rules" below for when to run additional tests.
 
 4. **Commit** — `git add -A && git commit -m "feat: [issue title] — [one line description]"`
    If git commit fails:
@@ -69,7 +59,7 @@ For each issue:
 In epic mode, you work on exactly ONE issue per session. Your session ends when:
 
 1. You have implemented the issue completely
-2. All required tests pass (Playwright for UI, API tests for backend, both for full-stack)
+2. `npm run build` passes (and any tagged tests pass, if applicable)
 3. You have committed the changes with a descriptive message
 4. You have marked the Linear issue as Done
 
@@ -89,39 +79,27 @@ If `ref_search_documentation` is unavailable, proceed without it — use your tr
 
 Query format: write a full sentence or question, not keywords. Good: "How do I configure Supabase row level security for authenticated users in Next.js". Bad: "supabase RLS".
 
-## Playwright Testing
+## Testing Rules (Non-Negotiable)
 
-Use the skill at `.claude/skills/e2e-test/SKILL.md` for all browser testing.
+### Regular Issues (Default)
 
-Key rules:
+- Verify with `npm run build` ONLY — this catches TypeScript errors and import issues
+- Do NOT run `npx playwright test` on regular issues
+- Do NOT install Playwright unless this is a [SNAPSHOT] issue
+- If the issue creates/modifies an API endpoint, run the specific API test file only
 
-- Never mark a UI feature Done based on visual inspection alone — run Playwright
-- Tests live in `e2e/` at the project root
-- Run tests with `npx playwright test`
-- If a test fails due to a genuine app bug, fix the app. If a test is wrong, fix the test. Never skip or comment out a failing test.
+### Tagged Issues
 
-## Backend / API Testing
+- If the issue description contains `[test:filename.spec.ts]`, run ONLY that test file
+- If the issue description contains `[test:api]`, run API tests only
 
-Use the skill at `.claude/skills/api-test/SKILL.md` for all backend testing.
+### Snapshot Issues
 
-**Rules:**
-
-- Any issue that creates or modifies an API route, database operation, auth guard,
-  webhook handler, or background job MUST have passing API tests before being marked Done
-- Tests live in `api_tests/` (Python) or `api-tests/` (TypeScript) at the project root
-- Run: `pytest api_tests/ -v` (Python) or `npx vitest run api-tests/` (TypeScript)
-- Never skip or comment out a failing test
-- Every API endpoint needs at minimum: (1) happy path test, (2) one error case test
-
-**When to use which:**
-
-- Backend-only issue: API tests only
-- Frontend-only issue: Playwright only
-- Full-stack issue: both
-
-For issues that don't involve UI or API changes (config, refactoring, migrations,
-schema changes): run the full existing test suite as your verification step.
-If no test suite exists, document what you verified manually in your commit message.
+- Install Playwright: `npx playwright install chromium`
+- Run the FULL E2E suite: `npx playwright test`
+- Run the FULL API test suite
+- Fix failures caused by THIS epic's code
+- Log failures from PREVIOUS epics as regression issues — do not block
 
 ## The Snapshot Issue
 
@@ -129,13 +107,19 @@ When you reach the `[SNAPSHOT]` issue:
 
 1. Review all commits made in this epic (`git log --oneline` since epic start)
 2. Identify any deviations from the original epic spec — things you built differently, APIs you changed, patterns you established
-3. Append to `build_deviations.md` (create if it doesn't exist):
+3. Install Playwright and run the full E2E suite:
+   ```bash
+   npx playwright install chromium
+   npx playwright test
+   ```
+   Also run the full API test suite. Fix failures caused by this epic's code. Log failures from previous epics as regression issues — do not block.
+4. Append to `build_deviations.md` (create if it doesn't exist):
    ```
    ## Epic N: [Name] — completed [date]
    - [One bullet per deviation or significant decision. Format: "Changed X to Y because Z"]
    - [If no deviations: "No deviations from spec"]
    ```
-4. Append to `shared_context.md`:
+5. Append to `shared_context.md`:
    ```
    ## Epic N Additions
    - [New API endpoints created]
@@ -143,8 +127,8 @@ When you reach the `[SNAPSHOT]` issue:
    - [New patterns/utilities established]
    - [Key architectural decisions]
    ```
-5. Commit both files: `git add -A && git commit -m "chore: epic N snapshot"`
-6. Mark the Snapshot issue Done
+6. Commit both files: `git add -A && git commit -m "chore: epic N snapshot"`
+7. Mark the Snapshot issue Done
 
 ## The Human Gate Issue
 
@@ -160,8 +144,9 @@ When you reach a `[HUMAN GATE]` issue:
 
 - Never use mock data or stub implementations that aren't marked with a TODO
 - Never suppress TypeScript errors with `any` or `@ts-ignore`
-- Never mark an issue Done without running the appropriate tests:
-  Playwright for UI issues, API tests for backend issues, both for full-stack issues
+- Never mark an issue Done without at minimum a passing `npm run build`
+- Never run `npx playwright test` on regular issues — only on [SNAPSHOT] issues or when tagged with `[test:...]`
+- Never install Playwright during regular issues — it wastes time and is only needed for [SNAPSHOT] issues
 - Never batch multiple issues into one commit
 - Never start a new issue while the previous one is uncommitted
 - Never create Linear issues — the harness manages these

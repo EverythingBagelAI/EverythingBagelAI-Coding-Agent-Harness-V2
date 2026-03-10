@@ -16,14 +16,12 @@ The file must follow this exact template:
 ## Meta
 - depends_on: {epic numbers, or "none"}
 - builds: {2-sentence summary of what this epic produces}
-- estimated_issues: {10-50}
 
 ## Purpose
 {2-3 sentences. What does this epic achieve? What is the user able to do after this epic is complete that they couldn't before?}
 
 ## Features
-{Numbered list. One sentence each. 8-40 items. These become Linear issues.
-Each feature should be a small, atomic unit of work — a single component, endpoint, function, or integration — NOT an entire feature area or system.
+{Numbered list. One sentence each. These are requirements. The Epic Initialiser will group related features into appropriately-sized issues. Each feature should describe a specific capability — it does NOT need to be a standalone issue.
 BAD:  "Implement authentication" / "Build the dashboard" / "Add payments"
 GOOD: "Create POST /api/auth/login endpoint with JWT response" / "Build DashboardSidebar component with nav links" / "Add Stripe checkout session creation endpoint"}
 

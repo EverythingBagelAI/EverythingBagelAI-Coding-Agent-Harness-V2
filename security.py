@@ -15,23 +15,35 @@ import shlex
 
 # Default allowed commands (used if configure_allowed_commands is never called)
 _DEFAULT_ALLOWED_COMMANDS: set[str] = {
-    # File inspection
-    "ls", "cat", "head", "tail", "wc", "grep",
-    # File operations
-    "cp", "mkdir", "chmod",
-    "find", "echo", "touch", "mv", "rm", "sed", "awk",
-    # Directory
-    "pwd",
-    # Node.js development
-    "npm", "node", "npx",
-    # Python development
-    "python3", "python", "pytest", "pip", "pip3", "export",
+    # Package managers
+    "npm", "npx", "yarn", "pnpm", "bun",
+    "pip", "pip3", "uv", "poetry", "pipenv",
+    # Build tools / runtimes
+    "node", "python", "python3",
+    "tsc", "vite", "next", "turbo",
+    "pytest", "jest", "vitest",
     # Version control
     "git",
+    # File inspection
+    "ls", "cat", "head", "tail", "wc", "grep", "find",
+    # File operations
+    "cp", "mkdir", "chmod", "touch", "mv", "rm", "sed", "awk",
+    # Development utilities
+    "curl", "wget",
+    "jq", "yq",
+    "docker", "docker-compose",
+    "psql", "supabase",
     # Process management
-    "ps", "lsof", "sleep", "pkill",
+    "ps", "lsof", "sleep", "pkill", "kill", "top",
+    # Shell utilities
+    "echo", "printf", "date", "env", "which", "whoami", "pwd",
+    "sort", "uniq", "tr", "cut", "xargs", "tee",
+    "test", "[", "true", "false",
+    "bash", "sh",
     # Archive
-    "unzip", "tar",
+    "tar", "gzip", "gunzip", "zip", "unzip",
+    # Variables
+    "export",
     # Script execution
     "init.sh",
 }

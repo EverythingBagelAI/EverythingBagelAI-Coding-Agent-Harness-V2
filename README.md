@@ -89,7 +89,7 @@ The output is an `epics/` directory and `shared_context.md` inside `./my-project
 python autonomous_agent_demo.py --project-dir ./my-project --mode epic
 ```
 
-**4. Monitor progress in Linear.** Each epic gets its own Linear project with issues the agent works through sequentially.
+**4. Monitor progress in Linear.** Each epic gets its own Linear project with numbered, prioritised issues. Issues move to "In Progress" automatically when the agent starts working on them.
 
 **5. Resolve human gates when they appear.** The harness pauses and prints exactly what setup is required. Complete the steps, mark the gate issue Done in Linear, then re-run the same command.
 
@@ -127,11 +127,11 @@ Do not use the same project directory for V1 and V2 modes.
 
 **Epics** are groups of related Linear issues generated from your spec. The harness works through epics sequentially — each epic gets a fresh agent context, avoiding the context window saturation that breaks long single-loop builds.
 
-**Snapshot sessions** run after each epic completes. A dedicated session reviews all commits from the epic and updates `shared_context.md` with the current architectural state — new endpoints, data model changes, established patterns. This gives subsequent epics accurate context about what was actually built, which may differ from what was originally specced.
+**Snapshot sessions** run after each epic completes. A dedicated session reviews all commits from the epic, runs the full Playwright E2E and API test suites, and updates `shared_context.md` with the current architectural state — new endpoints, data model changes, established patterns. This gives subsequent epics accurate context about what was actually built, which may differ from what was originally specced.
 
 **Human gates** are issues titled `[HUMAN GATE] ...` that pause the harness until manually resolved in Linear. The Architect agent creates these at epic boundaries where external setup is needed (API keys, third-party accounts, DNS configuration). The gate description includes a checklist of exactly what to do.
 
-**Skills** are reusable agent instructions in `.claude/skills/`. The harness ships two static skills (`e2e-test` for Playwright, `api-test` for pytest + httpx) that are copied into every project. On top of these, the harness **dynamically generates two categories of skills** based on the detected tech stack:
+**Skills** are reusable agent instructions in `.claude/skills/`. The harness ships two static skills (`e2e-test` for Playwright, `api-test` for pytest + httpx) that are copied into every project. Note: Playwright tests only run during snapshot sessions — regular issues use `npm run build` for verification, keeping coding sessions fast. On top of these, the harness **dynamically generates two categories of skills** based on the detected tech stack:
 
 **Workflow skills** (5, always generated):
 
@@ -146,6 +146,8 @@ Do not use the same project directory for V1 and V2 modes.
 Each detected library/framework gets its own skill containing real, up-to-date documentation fetched from the [Ref API](https://ref.tools) and code examples from the [Exa API](https://exa.ai). These load on demand when the agent works with that technology. Requires `REF_API_KEY` and/or `EXA_API_KEY` — without either, library skills are skipped and the agent relies on training knowledge. Results are cached for 24 hours in `.skill_docs_cache.json`.
 
 Stack detection reads from the app spec text, and in brownfield mode also scans `package.json`, `requirements.txt`/`pyproject.toml`, and framework config files. Generated skills include a `<!-- generated-by: harness -->` marker — re-running the harness overwrites these but preserves any skills you've customised manually.
+
+The harness also loads your `~/.claude/CLAUDE.md` and any project-level `CLAUDE.md` into the agent's system prompt, so your coding preferences (stack choices, style rules, anti-patterns) carry through to every session automatically.
 
 ---
 
@@ -189,7 +191,7 @@ The harness runs an allowlist-based security layer on all bash commands the agen
 - **`claude-progress.txt`** tracks epic state in your project directory. Do not commit it or edit it manually.
 - **Default model is Opus** (most capable but most expensive). Pass `--model` to override, e.g. `--model claude-sonnet-4-5` for a cheaper option.
 - **`SNAPSHOT_FAILURE.txt`** appearing in your project directory means a snapshot session failed. Review and update `shared_context.md` manually before continuing.
-- **First run takes 10–20 minutes.** The initialiser is creating a Linear project and 15–30 issues. Watch for `[Tool: ...]` output — it is working.
+- **First run takes 10–20 minutes.** The initialiser is creating a Linear project and issues. Watch for `[Tool: ...]` output — it is working.
 
 ---
 

@@ -23,7 +23,7 @@ Before creating any issues, call `mcp__linear__linear_list_teams` to get the ava
 Create issues in this order:
 
 1. A **Setup issue** — environment validation, dependency installation, running the dev server, verifying baseline from previous epic works
-2. **Feature issues** — one per feature in the epic spec's Features section. Each issue must include:
+2. **Feature issues** — group related features from the spec into well-sized issues (see Issue Sizing section above). Each issue must include:
    - Clear title
    - Description of what to build
    - Specific acceptance criteria (copied/adapted from the epic spec's Testing Criteria)
@@ -31,13 +31,69 @@ Create issues in this order:
 3. A **Snapshot issue** — always the second-to-last issue. Title: `[SNAPSHOT] Update shared_context and build_deviations`. This is when the coding agent writes the epic's architectural summary.
 4. A **Human Gate issue** (if this is not the final epic) — always the very last issue. Copy the Human Gate section from the epic spec verbatim as the issue description. Title: `[HUMAN GATE] Setup required before Epic [N+1]`.
 
+## Issue Sizing — The Verification Boundary Principle
+
+Features in the epic spec are REQUIREMENTS, not issues. Your job is to group
+related features into well-sized issues. Apply these three tests:
+
+### Test 1: Can it be verified alone?
+
+If feature A can't be tested without feature B existing, they're ONE issue.
+
+- Supabase client + server + service-role utilities → one issue
+- Database migration + the code that queries it → one issue
+- Auth provider setup + middleware + protected route → one issue
+
+### Test 2: Is it worth a session?
+
+Each coding session has ~3 minutes of startup overhead. If implementation takes
+less than 10 minutes, merge with related work.
+
+- `.env.example` + config files → part of the setup issue
+- A single type definition → part of the feature that uses it
+- A one-line utility function → part of the feature that calls it
+
+### Test 3: Does reverting it leave things working?
+
+If reverting issue A's commit would break issue B, they should be one issue.
+
+### Grouping Patterns
+
+| Group together                     | Example                                                                           |
+| ---------------------------------- | --------------------------------------------------------------------------------- |
+| All variants of an integration     | "Set up Supabase client layer (client, server, service-role, types)"              |
+| A page + its data fetching + route | "Build dashboard page with data loading and protected route"                      |
+| CRUD endpoints for one resource    | "Create projects API (CRUD endpoints + validation)"                               |
+| Migration + consuming code         | "Add projects table and ProjectService queries"                                   |
+| Config + the feature needing it    | Part of the setup issue or the first feature that uses it                         |
+| Auth setup end-to-end              | "Implement Clerk auth (provider, middleware, sign-in/up pages, protected routes)" |
+
+### What Makes a Good Issue
+
+- Takes 20-60 minutes of agent time
+- Produces a verifiable result (the build passes, a page renders, an API responds)
+- Can be described in one sentence: "After this issue, [specific thing] works"
+
+### What Makes a Bad Issue
+
+- Creates a file that nothing uses yet
+- Takes less than 5 minutes to implement
+- Can't be verified without the next issue existing
+- Title starts with "Create..." for a single utility file
+
 ## Issue Quality Rules
 
-- Each issue must be completable in one agent session (5-20 minutes) — a single component, endpoint, function, or integration
-- If a feature is complex, split it into multiple issues
 - Never create an issue that depends on another incomplete issue in the same epic — order them so each builds on the last
 - Every issue description must end with: `Acceptance criteria: [specific, testable conditions]`
 - For any issue that touches an external library, add: `Before implementing, use ref_search_documentation to look up: [specific query]`
+
+### Test Tags
+
+By default, issues have NO test tag — the coding agent will verify with `npm run build` only. Only add a test tag when the issue creates a new user-facing flow that needs E2E coverage:
+
+- `[test:filename.spec.ts]` — add this tag to issues that create new user-facing flows (e.g., auth flow, checkout flow, onboarding wizard). The coding agent will run ONLY that specific test file.
+- `[test:api]` — add this tag to issues that create or modify API endpoints. The coding agent will run API tests only.
+- Never tag utility, config, or migration issues with test tags — build verification is sufficient for these.
 
 ### Issue Scoping — Good vs Bad
 
@@ -60,6 +116,18 @@ Each issue title and description must be specific and actionable. Vague issues c
 - "Implement useAuth hook with login/logout/session state"
 - "Add form validation to SignUpForm with Zod schema"
 - "Create GET /api/projects/:id endpoint with ownership check"
+
+### Execution Order
+
+Number your issues sequentially in the title with a prefix: `[01]`, `[02]`, etc.
+Set the Linear priority field based on position:
+
+- Issues 1-3: Priority 1 (Urgent) — foundation work
+- Issues 4-6: Priority 2 (High) — core features
+- Issues 7+: Priority 3 (Medium) — remaining features
+- Setup issue: always Priority 1
+- Snapshot: Priority 4
+- Human Gate: Priority 4
 
 ## Linear Issue Format Examples
 
@@ -96,8 +164,8 @@ Verify the development environment is working before starting feature work.
 
     Steps:
     - npm install
-    - npm install -D @playwright/test && npx playwright install chromium
     - npm run dev (verify app starts on localhost:3000)
+    - npm run build (verify no TypeScript errors)
     - Run git log --oneline -5 to confirm clean starting state
 
     Acceptance criteria: Dev server starts without errors. No TypeScript errors on npm run build.

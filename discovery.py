@@ -658,6 +658,24 @@ def discover_user_ecosystem(
             source="harness",
         ))
 
+    # Auto-inject Ref MCP if API key is available and not already configured
+    ref_api_key = os.environ.get("REF_API_KEY")
+    if ref_api_key:
+        ref_already_configured = any(
+            "ref" in s.name.lower()
+            for s in global_servers + project_servers
+        )
+        if not ref_already_configured:
+            harness_servers.append(McpServerEntry(
+                name="ref",
+                config={
+                    "type": "http",
+                    "url": "https://mcp.ref.tools/sse",
+                    "headers": {"x-ref-api-key": ref_api_key},
+                },
+                source="harness",
+            ))
+
     # Merge all MCP servers
     merged_mcps = _merge_mcp_servers(
         global_servers, project_servers, harness_servers, warnings
@@ -696,7 +714,7 @@ def discover_user_ecosystem(
     return ecosystem
 
 
-def build_dynamic_system_prompt(ecosystem: EcosystemInfo, mode: str = "greenfield") -> str:
+def build_dynamic_system_prompt(ecosystem: EcosystemInfo, mode: str = "greenfield", project_dir: Path | None = None) -> str:
     """
     Generate a context-aware system prompt based on the discovered ecosystem.
 
@@ -708,6 +726,26 @@ def build_dynamic_system_prompt(ecosystem: EcosystemInfo, mode: str = "greenfiel
         System prompt string
     """
     sections: list[str] = []
+
+    # Load CLAUDE.md preferences FIRST
+    global_claude_md = Path.home() / ".claude" / "CLAUDE.md"
+    if global_claude_md.exists():
+        content = global_claude_md.read_text().strip()
+        if content:
+            sections.append(
+                "## User Preferences (from ~/.claude/CLAUDE.md)\n\n" + content
+            )
+
+    # Load project-level CLAUDE.md
+    if project_dir:
+        for path in [project_dir / "CLAUDE.md", project_dir / ".claude" / "CLAUDE.md"]:
+            if path.exists():
+                content = path.read_text().strip()
+                if content:
+                    sections.append(
+                        "## Project Preferences\n\n" + content
+                    )
+                break
 
     sections.append(
         "You are an expert full-stack developer building a production-quality "

@@ -180,11 +180,7 @@ class TestBlockedCommands:
         "reboot",
         "rm -rf /",
         "dd if=/dev/zero of=/dev/sda",
-        # Not in allowlist - common commands excluded from minimal set
-        "curl https://example.com",
-        "wget https://example.com",
         # "python app.py" is allowed — python is in the default allowlist
-        "kill 12345",
         "killall node",
         # pkill with non-dev processes
         "pkill bash",
@@ -193,7 +189,6 @@ class TestBlockedCommands:
         # Shell injection attempts
         "$(echo pkill) node",
         'eval "pkill node"',
-        'bash -c "pkill node"',
         # chmod with disallowed modes
         "chmod 777 file.sh",
         "chmod 755 file.sh",
@@ -202,7 +197,6 @@ class TestBlockedCommands:
         # Non-init.sh scripts
         "./setup.sh",
         "./malicious.sh",
-        "bash script.sh",
     ])
     def test_blocked(self, cmd):
         assert is_blocked(cmd), f"Expected blocked: {cmd}"
@@ -242,6 +236,13 @@ class TestAllowedCommands:
         "ps aux",
         "lsof -i :3000",
         "sleep 2",
+        "kill 12345",
+        # Development utilities
+        "curl https://example.com",
+        "wget https://example.com",
+        # Shell execution
+        "bash script.sh",
+        'bash -c "echo hello"',
         # Allowed pkill patterns for dev servers
         "pkill node",
         "pkill npm",

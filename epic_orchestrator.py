@@ -25,14 +25,18 @@ from linear_client import (
     filter_all_issues_complete,
     filter_snapshot_issue,
     is_human_gate_resolved,
+    set_issue_in_progress,
+    verify_all_issues_complete,
 )
 from progress import (
     acquire_harness_lock,
     load_epic_index,
     get_epic_by_number,
     get_next_pending_epic,
+    get_current_epic,
     get_human_gate_issue_id,
     get_linear_project_id,
+    set_current_epic,
     set_human_gate,
     clear_human_gate,
     mark_epic_complete,
@@ -68,6 +72,15 @@ async def _run_coding_loop(
     while True:
         iteration += 1
 
+        # Ensure progress state matches current epic (prevents stale state after crashes)
+        current_state_epic = get_current_epic(project_dir)
+        if current_state_epic != epic_number:
+            logger.info(
+                "Progress state epic (%s) differs from running epic (%s) — updating state file",
+                current_state_epic, epic_number,
+            )
+            set_current_epic(project_dir, epic_number, epic_name)
+
         if max_iterations and iteration > max_iterations:
             print(f"\nReached max iterations ({max_iterations}) for epic {epic_number}")
             print("Re-run to continue.")
@@ -85,19 +98,9 @@ async def _run_coding_loop(
         current_issue = filter_current_issue(all_issues)
 
         if current_issue is None:
-            # All regular issues done — check for human gate
-            gate_issue = filter_human_gate_issue(all_issues)
-            if gate_issue and gate_issue["state"]["type"] != "completed":
-                gate_id = gate_issue["id"]
-                set_human_gate(project_dir, gate_id)
-                _print_human_gate_pause_detail(
-                    epic_number, gate_issue.get("description", ""), project_dir
-                )
-                return (0, True)
-
-            # No more eligible issues — check if all complete
+            # Check if all regular issues are complete
             if filter_all_issues_complete(all_issues):
-                # Run snapshot session before marking epic complete
+                # Run snapshot FIRST (before checking gates)
                 snapshot_issue = filter_snapshot_issue(all_issues)
                 if snapshot_issue and snapshot_issue["state"]["type"] != "completed":
                     print(f"\n  Running Snapshot session for Epic {epic_number}...")
@@ -140,6 +143,17 @@ async def _run_coding_loop(
                         )
                         print("\n  ⚠ Warning: shared_context.md was not updated by snapshot session.")
 
+                # NOW check for human gate (after snapshot has run)
+                gate_issue = filter_human_gate_issue(all_issues)
+                if gate_issue and gate_issue["state"]["type"] != "completed":
+                    gate_id = gate_issue["id"]
+                    set_human_gate(project_dir, gate_id)
+                    _print_human_gate_pause_detail(
+                        epic_number, gate_issue.get("description", ""), project_dir
+                    )
+                    return (epic_issues_resolved, True)
+
+                # All done (including snapshot and gate)
                 epic_issues_resolved = iteration - 1  # approximate
                 return (epic_issues_resolved, False)
             else:
@@ -162,6 +176,12 @@ async def _run_coding_loop(
             print(f"  Fix the issue in Linear or re-run to retry from scratch.")
             print(f"  Stopping harness to prevent infinite loop.\n")
             return (0, True)
+
+        # Set issue to In Progress in Linear
+        try:
+            await set_issue_in_progress(issue_id)
+        except Exception as e:
+            logger.warning("Could not set issue to In Progress: %s", e)
 
         # Build the prompt with injected context
         prompt = build_coding_agent_session_prompt(
@@ -326,6 +346,13 @@ async def run_epic_mode(
 
         if should_stop:
             return
+
+        # Verify with Linear before marking complete (never trust local state alone)
+        all_done, done_count, total_count = await verify_all_issues_complete(project_id)
+        if not all_done:
+            print(f"\n  Linear verification failed: {done_count}/{total_count} issues complete.")
+            print("  Local state may be out of sync. Re-running coding loop.")
+            continue  # Re-enter the while loop instead of marking complete
 
         total_issues_resolved += epic_issues_resolved
         mark_epic_complete(project_dir, epic_number)

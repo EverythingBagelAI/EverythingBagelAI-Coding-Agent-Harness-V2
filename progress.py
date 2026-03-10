@@ -288,6 +288,12 @@ def get_linear_project_id(project_dir: Path) -> str | None:
     return state["linear_project_id"]
 
 
+def get_current_epic(project_dir: Path) -> int | None:
+    """Retrieve the current epic number from progress state."""
+    state = _read_epic_state(project_dir)
+    return state["current_epic"]
+
+
 def get_human_gate_issue_id(project_dir: Path) -> str | None:
     """Retrieve the stored human gate issue ID."""
     state = _read_epic_state(project_dir)

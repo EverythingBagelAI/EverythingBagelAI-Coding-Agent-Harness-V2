@@ -304,6 +304,18 @@ def build_epic_initializer_context(epic_number: int, project_dir: Path) -> str:
 
     # 4. The specific epic spec
     spec_file = _validate_spec_file_path(epic["spec_file"], project_dir)
+    if not spec_file.exists():
+        # Fallback: glob for the spec file by epic number
+        import glob
+
+        pattern = str(project_dir / "epics" / f"epic-{epic_number:02d}-*.md")
+        matches = sorted(glob.glob(pattern))
+        if matches:
+            spec_file = Path(matches[0])
+        else:
+            raise FileNotFoundError(
+                f"Epic spec not found at {spec_file} or by glob pattern {pattern}"
+            )
     epic_spec = _read_file_or_note(spec_file, required=True)
     sections.append(_wrap_context(epic["spec_file"], epic_spec))
 
