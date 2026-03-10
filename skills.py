@@ -13,9 +13,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
+
+import httpx
 
 from prompts import _KNOWN_LIBRARIES
 
@@ -864,3 +869,404 @@ def generate_project_skills(
         logger.info("[Skills] Generated %s", skill_name)
 
     return generated
+
+
+# ---------------------------------------------------------------------------
+# Library Documentation Skills — Metadata & Fetch (Steps 1+2)
+# ---------------------------------------------------------------------------
+
+REF_API_URL = "https://api.ref.tools/v1/search"
+EXA_API_URL = "https://api.exa.ai/search"
+SKILL_DOCS_CACHE_TTL = 86400  # 24 hours
+MAX_LIBRARY_SKILLS = 15
+
+# Maps library name → skill directory slug
+_LIBRARY_SKILL_SLUGS: dict[str, str] = {
+    "Next.js": "nextjs-docs",
+    "React": "react-docs",
+    "FastAPI": "fastapi-docs",
+    "Clerk": "clerk-docs",
+    "Supabase": "supabase-docs",
+    "Stripe": "stripe-docs",
+    "Tailwind": "tailwind-docs",
+    "shadcn": "shadcn-docs",
+    "Prisma": "prisma-docs",
+    "Drizzle": "drizzle-docs",
+    "LangChain": "langchain-docs",
+    "CopilotKit": "copilotkit-docs",
+    "Zustand": "zustand-docs",
+    "Zod": "zod-docs",
+    "Playwright": "playwright-docs",
+    "Vitest": "vitest-docs",
+    "GSAP": "gsap-docs",
+    "Remotion": "remotion-docs",
+    "Pydantic": "pydantic-docs",
+    "tRPC": "trpc-docs",
+    "Convex": "convex-docs",
+    "Expo": "expo-docs",
+    "React Native": "react-native-docs",
+    "NextAuth": "nextauth-docs",
+    "Auth.js": "authjs-docs",
+    "Lucia": "lucia-docs",
+    "Framer Motion": "framer-motion-docs",
+    "Radix": "radix-docs",
+    "Headless UI": "headless-ui-docs",
+    "MagicUI": "magicui-docs",
+    "Redis": "redis-docs",
+    "Resend": "resend-docs",
+    "Inngest": "inngest-docs",
+    "Upstash": "upstash-docs",
+    "PostgreSQL": "postgresql-docs",
+    "Vercel": "vercel-docs",
+    "Render": "render-docs",
+}
+
+# Maps library name → {"ref": query, "exa": query} for targeted searches
+_LIBRARY_SEARCH_QUERIES: dict[str, dict[str, str]] = {
+    "Next.js": {
+        "ref": "Next.js 15 App Router API reference",
+        "exa": "Next.js 15 App Router best practices examples server components",
+    },
+    "React": {
+        "ref": "React hooks API reference",
+        "exa": "React hooks patterns best practices examples",
+    },
+    "FastAPI": {
+        "ref": "FastAPI Python async endpoints Pydantic V2",
+        "exa": "FastAPI Pydantic V2 async endpoint examples best practices",
+    },
+    "Clerk": {
+        "ref": "Clerk Next.js authentication setup middleware",
+        "exa": "Clerk Next.js authentication implementation examples 2024",
+    },
+    "Supabase": {
+        "ref": "Supabase JavaScript client API reference",
+        "exa": "Supabase Row Level Security policies Next.js examples",
+    },
+    "Stripe": {
+        "ref": "Stripe API checkout subscriptions webhooks",
+        "exa": "Stripe Next.js integration checkout webhook examples",
+    },
+    "Tailwind": {
+        "ref": "Tailwind CSS utility classes responsive design",
+        "exa": "Tailwind CSS component patterns responsive design examples",
+    },
+    "shadcn": {
+        "ref": "shadcn/ui component library installation usage",
+        "exa": "shadcn ui Next.js component examples customisation",
+    },
+    "Prisma": {
+        "ref": "Prisma ORM schema migrations queries",
+        "exa": "Prisma ORM Next.js TypeScript examples best practices",
+    },
+    "Drizzle": {
+        "ref": "Drizzle ORM schema queries migrations",
+        "exa": "Drizzle ORM TypeScript examples best practices",
+    },
+    "LangChain": {
+        "ref": "LangChain Python LCEL chains tools agents",
+        "exa": "LangChain Python LCEL structured output examples 2024",
+    },
+    "CopilotKit": {
+        "ref": "CopilotKit React AI copilot integration",
+        "exa": "CopilotKit React integration AG-UI examples",
+    },
+    "Zustand": {
+        "ref": "Zustand React state management API",
+        "exa": "Zustand React state management patterns examples",
+    },
+    "Zod": {
+        "ref": "Zod TypeScript schema validation API",
+        "exa": "Zod TypeScript validation patterns examples",
+    },
+    "Playwright": {
+        "ref": "Playwright end-to-end testing API reference",
+        "exa": "Playwright E2E testing Next.js examples best practices",
+    },
+    "Vitest": {
+        "ref": "Vitest unit testing framework API reference",
+        "exa": "Vitest React Testing Library examples best practices",
+    },
+    "GSAP": {
+        "ref": "GSAP animation library ScrollTrigger API",
+        "exa": "GSAP React animation ScrollTrigger examples",
+    },
+    "Remotion": {
+        "ref": "Remotion React video creation API",
+        "exa": "Remotion React programmatic video examples",
+    },
+    "Pydantic": {
+        "ref": "Pydantic V2 model validation configuration",
+        "exa": "Pydantic V2 model validator field_validator examples",
+    },
+    "tRPC": {
+        "ref": "tRPC type-safe API Next.js",
+        "exa": "tRPC Next.js App Router examples best practices",
+    },
+    "Convex": {
+        "ref": "Convex reactive backend database API",
+        "exa": "Convex React real-time backend examples",
+    },
+    "Expo": {
+        "ref": "Expo React Native SDK API reference",
+        "exa": "Expo React Native app development examples",
+    },
+    "React Native": {
+        "ref": "React Native components API reference",
+        "exa": "React Native best practices examples 2024",
+    },
+    "NextAuth": {
+        "ref": "NextAuth.js authentication providers configuration",
+        "exa": "NextAuth Next.js authentication examples",
+    },
+    "Auth.js": {
+        "ref": "Auth.js v5 authentication setup",
+        "exa": "Auth.js v5 Next.js authentication examples",
+    },
+    "Lucia": {
+        "ref": "Lucia authentication library API",
+        "exa": "Lucia auth Next.js implementation examples",
+    },
+    "Framer Motion": {
+        "ref": "Framer Motion React animation API",
+        "exa": "Framer Motion React animation examples patterns",
+    },
+    "Radix": {
+        "ref": "Radix UI accessible component primitives",
+        "exa": "Radix UI React accessible component examples",
+    },
+    "Headless UI": {
+        "ref": "Headless UI Tailwind component library",
+        "exa": "Headless UI Tailwind React component examples",
+    },
+    "MagicUI": {
+        "ref": "Magic UI animated component library",
+        "exa": "Magic UI React animated component examples",
+    },
+    "Redis": {
+        "ref": "Redis commands data structures API",
+        "exa": "Redis Node.js Python caching examples best practices",
+    },
+    "Resend": {
+        "ref": "Resend email API Next.js integration",
+        "exa": "Resend email API Next.js React Email examples",
+    },
+    "Inngest": {
+        "ref": "Inngest serverless functions events",
+        "exa": "Inngest Next.js background jobs examples",
+    },
+    "Upstash": {
+        "ref": "Upstash Redis rate limiting API",
+        "exa": "Upstash Redis Next.js rate limiting examples",
+    },
+    "PostgreSQL": {
+        "ref": "PostgreSQL SQL queries indexes performance",
+        "exa": "PostgreSQL query optimization indexing best practices",
+    },
+    "Vercel": {
+        "ref": "Vercel deployment configuration Next.js",
+        "exa": "Vercel deployment Next.js configuration examples",
+    },
+    "Render": {
+        "ref": "Render web service deployment configuration",
+        "exa": "Render FastAPI Python deployment examples",
+    },
+}
+
+# Maps library name → static metadata for Quick Reference section
+_LIBRARY_METADATA: dict[str, dict[str, str]] = {
+    "Next.js": {"url": "https://nextjs.org/docs", "package": "next"},
+    "React": {"url": "https://react.dev", "package": "react"},
+    "FastAPI": {"url": "https://fastapi.tiangolo.com", "package": "fastapi"},
+    "Clerk": {"url": "https://clerk.com/docs", "package": "@clerk/nextjs"},
+    "Supabase": {"url": "https://supabase.com/docs", "package": "@supabase/supabase-js"},
+    "Stripe": {"url": "https://docs.stripe.com", "package": "stripe"},
+    "Tailwind": {"url": "https://tailwindcss.com/docs", "package": "tailwindcss"},
+    "shadcn": {"url": "https://ui.shadcn.com/docs", "package": "shadcn"},
+    "Prisma": {"url": "https://www.prisma.io/docs", "package": "@prisma/client"},
+    "Drizzle": {"url": "https://orm.drizzle.team/docs", "package": "drizzle-orm"},
+    "LangChain": {"url": "https://python.langchain.com/docs", "package": "langchain"},
+    "CopilotKit": {"url": "https://docs.copilotkit.ai", "package": "@copilotkit/react-core"},
+    "Zustand": {"url": "https://zustand-demo.pmnd.rs", "package": "zustand"},
+    "Zod": {"url": "https://zod.dev", "package": "zod"},
+    "Playwright": {"url": "https://playwright.dev/docs", "package": "@playwright/test"},
+    "Vitest": {"url": "https://vitest.dev", "package": "vitest"},
+    "GSAP": {"url": "https://gsap.com/docs", "package": "gsap"},
+    "Remotion": {"url": "https://remotion.dev/docs", "package": "remotion"},
+    "Pydantic": {"url": "https://docs.pydantic.dev", "package": "pydantic"},
+    "tRPC": {"url": "https://trpc.io/docs", "package": "@trpc/server"},
+    "Convex": {"url": "https://docs.convex.dev", "package": "convex"},
+    "Expo": {"url": "https://docs.expo.dev", "package": "expo"},
+    "React Native": {"url": "https://reactnative.dev/docs", "package": "react-native"},
+    "NextAuth": {"url": "https://next-auth.js.org/getting-started", "package": "next-auth"},
+    "Auth.js": {"url": "https://authjs.dev", "package": "@auth/core"},
+    "Lucia": {"url": "https://lucia-auth.com", "package": "lucia"},
+    "Framer Motion": {"url": "https://motion.dev/docs", "package": "framer-motion"},
+    "Radix": {"url": "https://www.radix-ui.com/primitives/docs", "package": "@radix-ui/react-slot"},
+    "Headless UI": {"url": "https://headlessui.com", "package": "@headlessui/react"},
+    "MagicUI": {"url": "https://magicui.design/docs", "package": "@magic-ui/core"},
+    "Redis": {"url": "https://redis.io/docs", "package": "redis"},
+    "Resend": {"url": "https://resend.com/docs", "package": "resend"},
+    "Inngest": {"url": "https://www.inngest.com/docs", "package": "inngest"},
+    "Upstash": {"url": "https://upstash.com/docs", "package": "@upstash/redis"},
+    "PostgreSQL": {"url": "https://www.postgresql.org/docs", "package": "pg"},
+    "Vercel": {"url": "https://vercel.com/docs", "package": "vercel"},
+    "Render": {"url": "https://docs.render.com", "package": "render"},
+}
+
+
+def _slugify_library(library: str) -> str:
+    """Convert a library name to a skill directory slug."""
+    if library in _LIBRARY_SKILL_SLUGS:
+        return _LIBRARY_SKILL_SLUGS[library]
+    return re.sub(r"[^a-z0-9-]", "", library.lower().replace(" ", "-").replace(".", "")) + "-docs"
+
+
+def _fetch_ref_for_skill(library: str, api_key: str) -> tuple[str, str | None]:
+    """Fetch Ref API documentation for a library. Returns (library, content or None)."""
+    queries = _LIBRARY_SEARCH_QUERIES.get(library, {})
+    query = queries.get("ref", f"{library} API reference documentation")
+    try:
+        response = httpx.get(
+            REF_API_URL,
+            headers={"x-ref-api-key": api_key},
+            params={"q": query, "limit": 1},
+            timeout=10,
+        )
+        if response.status_code == 200:
+            results = response.json().get("results", [])
+            if results:
+                content = results[0].get("content", "")
+                if content:
+                    return library, content[:8000]
+    except Exception:
+        pass
+    return library, None
+
+
+def _fetch_exa_for_skill(library: str, api_key: str) -> tuple[str, str | None]:
+    """Fetch Exa API code examples for a library. Returns (library, content or None)."""
+    queries = _LIBRARY_SEARCH_QUERIES.get(library, {})
+    query = queries.get("exa", f"{library} best practices examples {time.strftime('%Y')}")
+    try:
+        response = httpx.post(
+            EXA_API_URL,
+            headers={
+                "x-api-key": api_key,
+                "Content-Type": "application/json",
+            },
+            json={
+                "query": query,
+                "type": "auto",
+                "numResults": 3,
+                "contents": {
+                    "text": True,
+                    "highlights": {"maxCharacters": 4000},
+                },
+            },
+            timeout=15,
+        )
+        if response.status_code == 200:
+            results = response.json().get("results", [])
+            if results:
+                snippets: list[str] = []
+                for r in results:
+                    title = r.get("title", "")
+                    url = r.get("url", "")
+                    highlights = r.get("highlights", [])
+                    text = "\n".join(highlights) if highlights else r.get("text", "")[:2000]
+                    snippets.append(f"### {title}\nSource: {url}\n\n{text}")
+                return library, "\n\n".join(snippets)
+    except Exception:
+        pass
+    return library, None
+
+
+def _load_skill_docs_cache(cache_path: Path | None) -> dict:
+    """Load cached library documentation results."""
+    if cache_path is None or not cache_path.exists():
+        return {}
+    try:
+        data = json.loads(cache_path.read_text())
+        if isinstance(data, dict):
+            return data
+    except (json.JSONDecodeError, IOError):
+        pass
+    return {}
+
+
+def _save_skill_docs_cache(cache_path: Path | None, cache: dict) -> None:
+    """Save library documentation cache to disk."""
+    if cache_path is None:
+        return
+    try:
+        cache_path.write_text(json.dumps(cache, indent=2))
+    except IOError as e:
+        logger.warning("[Skill Docs] Could not write cache: %s", e)
+
+
+def _fetch_all_library_docs(
+    libraries: list[str],
+    ref_key: str | None,
+    exa_key: str | None,
+    cache_path: Path | None,
+) -> dict[str, dict]:
+    """
+    Fetch documentation for all libraries in parallel, with caching.
+
+    Returns {library: {"ref_content": str|None, "exa_content": str|None}}.
+    """
+    cache = _load_skill_docs_cache(cache_path)
+    now = time.time()
+    results: dict[str, dict] = {}
+    libs_to_fetch: list[str] = []
+
+    # Check cache first
+    for lib in libraries:
+        cached = cache.get(lib)
+        if cached and (now - cached.get("timestamp", 0)) < SKILL_DOCS_CACHE_TTL:
+            results[lib] = {
+                "ref_content": cached.get("ref_content"),
+                "exa_content": cached.get("exa_content"),
+            }
+            logger.info("[Skill Docs] Cache hit: %s", lib)
+        else:
+            libs_to_fetch.append(lib)
+
+    if not libs_to_fetch:
+        return results
+
+    # Parallel fetch — submit both Ref and Exa for each library
+    try:
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures: dict = {}
+            for lib in libs_to_fetch:
+                if ref_key:
+                    futures[executor.submit(_fetch_ref_for_skill, lib, ref_key)] = (lib, "ref")
+                if exa_key:
+                    futures[executor.submit(_fetch_exa_for_skill, lib, exa_key)] = (lib, "exa")
+
+            partial: dict[str, dict] = {lib: {} for lib in libs_to_fetch}
+            for future in as_completed(futures, timeout=30):
+                try:
+                    lib_name, content = future.result(timeout=5)
+                    _, source = futures[future]
+                    key = "ref_content" if source == "ref" else "exa_content"
+                    partial[lib_name][key] = content
+                except Exception:
+                    pass
+
+            for lib in libs_to_fetch:
+                ref_content = partial[lib].get("ref_content")
+                exa_content = partial[lib].get("exa_content")
+                results[lib] = {"ref_content": ref_content, "exa_content": exa_content}
+                cache[lib] = {
+                    "ref_content": ref_content,
+                    "exa_content": exa_content,
+                    "timestamp": now,
+                }
+    except Exception as e:
+        logger.warning("[Skill Docs] Error during parallel fetch: %s", e)
+
+    _save_skill_docs_cache(cache_path, cache)
+    return results
