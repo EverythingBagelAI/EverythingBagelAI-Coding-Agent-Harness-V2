@@ -52,6 +52,7 @@ Set these environment variables before running:
 | `HARNESS_SESSION_TIMEOUT`     | No       | Coding session timeout in seconds (default: 1800 = 30 min)                                                                                                         |
 | `HARNESS_ARCHITECT_TIMEOUT`   | No       | Architect session timeout in seconds (default: 3600 = 60 min)                                                                                                      |
 | `HARNESS_EPIC_WRITER_TIMEOUT` | No       | Per-epic spec writer timeout in seconds (default: 900 = 15 min)                                                                                                    |
+| `EXA_API_KEY`                 | No       | [Exa](https://exa.ai) API key for fetching code examples into library skills. Without it, library skills use Ref docs only                                         |
 
 **The harness configures the Linear MCP connection automatically using `LINEAR_API_KEY`. You do not need to set up Linear OAuth or the Linear MCP server manually.**
 
@@ -130,13 +131,19 @@ Do not use the same project directory for V1 and V2 modes.
 
 **Human gates** are issues titled `[HUMAN GATE] ...` that pause the harness until manually resolved in Linear. The Architect agent creates these at epic boundaries where external setup is needed (API keys, third-party accounts, DNS configuration). The gate description includes a checklist of exactly what to do.
 
-**Skills** are reusable agent instructions in `.claude/skills/`. The harness ships two static skills (`e2e-test` for Playwright, `api-test` for pytest + httpx) that are copied into every project. On top of these, the harness **dynamically generates five project-specific skills** based on the detected tech stack:
+**Skills** are reusable agent instructions in `.claude/skills/`. The harness ships two static skills (`e2e-test` for Playwright, `api-test` for pytest + httpx) that are copied into every project. On top of these, the harness **dynamically generates two categories of skills** based on the detected tech stack:
+
+**Workflow skills** (5, always generated):
 
 - **test-runner** — exact test commands and patterns for the detected frameworks (e.g. Vitest + RTL for Next.js, pytest + httpx for FastAPI)
 - **code-review** — stack-aware review checklist covering framework-specific anti-patterns, auth, database, and integration checks
 - **project-reference** — pointers to the app spec, shared context, and build deviations so the agent can recall design intent
 - **deployment-check** — pre-deployment validation covering environment variables, build commands, and production-readiness checks for the specific stack
 - **linear-workflow** — project-specific Linear integration with issue lifecycle, snapshot handling, and human gate instructions
+
+**Library documentation skills** (one per detected library, e.g. `nextjs-docs`, `clerk-docs`, `fastapi-docs`):
+
+Each detected library/framework gets its own skill containing real, up-to-date documentation fetched from the [Ref API](https://ref.tools) and code examples from the [Exa API](https://exa.ai). These load on demand when the agent works with that technology. Requires `REF_API_KEY` and/or `EXA_API_KEY` — without either, library skills are skipped and the agent relies on training knowledge. Results are cached for 24 hours in `.skill_docs_cache.json`.
 
 Stack detection reads from the app spec text, and in brownfield mode also scans `package.json`, `requirements.txt`/`pyproject.toml`, and framework config files. Generated skills include a `<!-- generated-by: harness -->` marker — re-running the harness overwrites these but preserves any skills you've customised manually.
 
