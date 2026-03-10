@@ -815,6 +815,7 @@ def generate_project_skills(
     spec_text: str,
     mode: str = "greenfield",
     is_epic: bool = False,
+    stack: TechStack | None = None,
 ) -> list[str]:
     """
     Generate project-specific skills based on the detected tech stack.
@@ -822,9 +823,12 @@ def generate_project_skills(
     Detects the tech stack from the spec and/or codebase, renders skill
     templates, and writes them to <project>/.claude/skills/<name>/SKILL.md.
 
+    If ``stack`` is provided, uses it directly instead of re-detecting.
+
     Returns list of generated skill names.
     """
-    stack = detect_tech_stack(spec_text, project_dir, mode=mode)
+    if stack is None:
+        stack = detect_tech_stack(spec_text, project_dir, mode=mode)
 
     ctx = {
         "mode": mode,
@@ -1346,3 +1350,80 @@ def _build_library_skill(
         content = "\n".join(lines)
 
     return content
+
+
+# ---------------------------------------------------------------------------
+# Library Skill Generator (Step 4)
+# ---------------------------------------------------------------------------
+
+def generate_library_skills(
+    project_dir: Path,
+    stack: TechStack,
+    ref_api_key: str | None = None,
+    exa_api_key: str | None = None,
+) -> list[str]:
+    """
+    Generate per-library documentation skills from Ref + Exa APIs.
+
+    For each library in stack.all_libraries, fetches documentation and
+    code examples, then writes a skill to <project>/.claude/skills/<slug>/SKILL.md.
+
+    Returns list of generated skill names (slugs).
+    """
+    ref_key = ref_api_key or os.environ.get("REF_API_KEY")
+    exa_key = exa_api_key or os.environ.get("EXA_API_KEY")
+
+    if not ref_key and not exa_key:
+        logger.info("[Library Skills] No API keys set (REF_API_KEY, EXA_API_KEY) — skipping")
+        return []
+
+    libraries = stack.all_libraries[:MAX_LIBRARY_SKILLS]
+    if not libraries:
+        return []
+
+    logger.info("[Library Skills] Generating skills for: %s", ", ".join(libraries))
+
+    # Fetch documentation in parallel with caching
+    cache_path = project_dir / ".skill_docs_cache.json"
+    docs = _fetch_all_library_docs(libraries, ref_key, exa_key, cache_path)
+
+    skills_dir = project_dir / ".claude" / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+
+    generated: list[str] = []
+
+    for library in libraries:
+        lib_docs = docs.get(library, {})
+        ref_content = lib_docs.get("ref_content")
+        exa_content = lib_docs.get("exa_content")
+
+        # Skip if no content at all
+        if not ref_content and not exa_content:
+            logger.info("[Library Skills] No content for %s — skipping", library)
+            continue
+
+        slug = _slugify_library(library)
+        skill_dir = skills_dir / slug
+        skill_path = skill_dir / "SKILL.md"
+
+        # Preserve user-created skills
+        if skill_path.exists() and not _is_harness_generated(skill_path):
+            logger.info(
+                "[Library Skills] Skipping %s — exists and not harness-generated",
+                slug,
+            )
+            continue
+
+        # Build and write skill
+        try:
+            content = _build_library_skill(library, ref_content, exa_content)
+        except Exception as e:
+            logger.warning("[Library Skills] Failed to build %s: %s", slug, e)
+            continue
+
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        skill_path.write_text(content)
+        generated.append(slug)
+        logger.info("[Library Skills] Generated %s", slug)
+
+    return generated
