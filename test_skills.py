@@ -8,20 +8,28 @@ and brownfield handling.
 
 import json
 import textwrap
+import time
 from pathlib import Path
+from unittest.mock import patch
 
+import httpx
 import pytest
 
 from skills import (
     GENERATED_MARKER,
+    MAX_LIBRARY_SKILLS,
+    SKILL_DOCS_CACHE_TTL,
     TechStack,
     _build_code_review_skill,
     _build_deployment_check_skill,
+    _build_library_skill,
     _build_linear_workflow_skill,
     _build_project_reference_skill,
     _build_test_runner_skill,
     _is_harness_generated,
+    _slugify_library,
     detect_tech_stack,
+    generate_library_skills,
     generate_project_skills,
 )
 
@@ -414,3 +422,225 @@ class TestIsHarnessGenerated:
     def test_returns_false_for_missing_file(self, tmp_path: Path) -> None:
         path = tmp_path / "nonexistent.md"
         assert _is_harness_generated(path) is False
+
+
+# ---------------------------------------------------------------------------
+# generate_library_skills() tests
+# ---------------------------------------------------------------------------
+
+def _mock_ref_response(content: str = "# API Reference\n\nSample documentation.") -> httpx.Response:
+    """Build a mock Ref API response."""
+    return httpx.Response(
+        200,
+        json={"results": [{"content": content}]},
+        request=httpx.Request("GET", "https://api.ref.tools/v1/search"),
+    )
+
+
+def _mock_exa_response(
+    title: str = "Example",
+    url: str = "https://example.com",
+    highlights: list[str] | None = None,
+) -> httpx.Response:
+    """Build a mock Exa API response."""
+    return httpx.Response(
+        200,
+        json={
+            "results": [
+                {
+                    "title": title,
+                    "url": url,
+                    "text": "Full text content",
+                    "highlights": highlights or ["Highlight snippet one.", "Highlight snippet two."],
+                }
+            ]
+        },
+        request=httpx.Request("POST", "https://api.exa.ai/search"),
+    )
+
+
+class TestGenerateLibrarySkills:
+    """Tests for per-library documentation skill generation."""
+
+    def _make_stack(self, libraries: list[str] | None = None) -> TechStack:
+        return TechStack(
+            frontend_framework="nextjs",
+            backend_framework="fastapi",
+            all_libraries=libraries or ["Next.js", "Clerk", "FastAPI"],
+        )
+
+    @patch("skills.httpx.get", return_value=_mock_ref_response())
+    @patch("skills.httpx.post", return_value=_mock_exa_response())
+    def test_generates_skills_for_detected_libraries(
+        self, mock_post, mock_get, tmp_project: Path
+    ) -> None:
+        """With mocked API responses, generates one skill per library."""
+        stack = self._make_stack()
+        generated = generate_library_skills(
+            tmp_project, stack, ref_api_key="test-ref", exa_api_key="test-exa"
+        )
+        assert len(generated) == 3
+        assert "nextjs-docs" in generated
+        assert "clerk-docs" in generated
+        assert "fastapi-docs" in generated
+
+        # Verify files exist
+        for slug in generated:
+            skill_path = tmp_project / ".claude" / "skills" / slug / "SKILL.md"
+            assert skill_path.exists()
+            content = skill_path.read_text()
+            assert GENERATED_MARKER in content
+            assert "---" in content  # frontmatter
+
+    def test_graceful_degradation_no_api_keys(self, tmp_project: Path) -> None:
+        """Returns empty list when no API keys are set."""
+        stack = self._make_stack()
+        with patch.dict("os.environ", {}, clear=True):
+            generated = generate_library_skills(tmp_project, stack)
+        assert generated == []
+
+    @patch("skills.httpx.get", return_value=_mock_ref_response())
+    @patch("skills.httpx.post", return_value=_mock_exa_response())
+    def test_respects_harness_marker(
+        self, mock_post, mock_get, tmp_project: Path
+    ) -> None:
+        """Overwrites harness-generated, preserves user-created."""
+        stack = self._make_stack(["Next.js"])
+
+        # Create a user-created skill (no marker)
+        user_dir = tmp_project / ".claude" / "skills" / "nextjs-docs"
+        user_dir.mkdir(parents=True, exist_ok=True)
+        user_content = "---\nname: nextjs-docs\ndescription: My custom docs.\n---\n\n# My Docs\n"
+        (user_dir / "SKILL.md").write_text(user_content)
+
+        generated = generate_library_skills(
+            tmp_project, stack, ref_api_key="test-ref", exa_api_key="test-exa"
+        )
+        assert "nextjs-docs" not in generated
+        assert (user_dir / "SKILL.md").read_text() == user_content
+
+    @patch("skills.httpx.get", return_value=_mock_ref_response())
+    @patch("skills.httpx.post", return_value=_mock_exa_response())
+    def test_skill_under_500_lines(
+        self, mock_post, mock_get, tmp_project: Path
+    ) -> None:
+        """Generated library skills stay under 500 lines."""
+        stack = self._make_stack()
+        generated = generate_library_skills(
+            tmp_project, stack, ref_api_key="test-ref", exa_api_key="test-exa"
+        )
+        for slug in generated:
+            content = (tmp_project / ".claude" / "skills" / slug / "SKILL.md").read_text()
+            line_count = content.count("\n") + 1
+            assert line_count <= 500, f"{slug} has {line_count} lines"
+
+    @patch("skills.httpx.get", return_value=_mock_ref_response())
+    @patch("skills.httpx.post", return_value=_mock_exa_response())
+    def test_caching_prevents_refetch(
+        self, mock_post, mock_get, tmp_project: Path
+    ) -> None:
+        """Second call uses cache instead of hitting APIs."""
+        stack = self._make_stack(["Next.js"])
+
+        # First call — hits APIs
+        generate_library_skills(
+            tmp_project, stack, ref_api_key="test-ref", exa_api_key="test-exa"
+        )
+        first_call_count = mock_get.call_count + mock_post.call_count
+
+        # Reset call counts
+        mock_get.reset_mock()
+        mock_post.reset_mock()
+
+        # Second call — should use cache
+        generate_library_skills(
+            tmp_project, stack, ref_api_key="test-ref", exa_api_key="test-exa"
+        )
+        second_call_count = mock_get.call_count + mock_post.call_count
+        assert second_call_count == 0, f"Expected 0 API calls on second run, got {second_call_count}"
+
+    @patch("skills.httpx.get", return_value=_mock_ref_response())
+    @patch("skills.httpx.post", return_value=_mock_exa_response())
+    def test_library_cap_at_15(
+        self, mock_post, mock_get, tmp_project: Path
+    ) -> None:
+        """No more than 15 library skills generated."""
+        # Create a stack with 20 libraries
+        libs = [f"Lib{i}" for i in range(20)]
+        stack = self._make_stack(libs)
+        generated = generate_library_skills(
+            tmp_project, stack, ref_api_key="test-ref", exa_api_key="test-exa"
+        )
+        assert len(generated) <= MAX_LIBRARY_SKILLS
+
+    @patch("skills.httpx.get", return_value=_mock_ref_response())
+    @patch("skills.httpx.post", return_value=_mock_exa_response())
+    def test_fallback_queries_for_unknown_libraries(
+        self, mock_post, mock_get, tmp_project: Path
+    ) -> None:
+        """Libraries not in _LIBRARY_SEARCH_QUERIES get sensible defaults."""
+        stack = self._make_stack(["SomeObscureLib"])
+        generated = generate_library_skills(
+            tmp_project, stack, ref_api_key="test-ref", exa_api_key="test-exa"
+        )
+        assert len(generated) == 1
+        slug = generated[0]
+        assert slug == "someobscurelib-docs"
+
+        content = (tmp_project / ".claude" / "skills" / slug / "SKILL.md").read_text()
+        assert "SomeObscureLib" in content
+        assert GENERATED_MARKER in content
+
+
+class TestBuildLibrarySkill:
+    """Tests for the library skill assembler."""
+
+    def test_valid_frontmatter(self) -> None:
+        content = _build_library_skill("Next.js", "Some docs", "Some examples")
+        lines = content.strip().split("\n")
+        assert lines[0] == "---"
+        assert "name: nextjs-docs" in content
+        assert "description:" in content
+
+    def test_has_marker(self) -> None:
+        content = _build_library_skill("Clerk", "Docs content", None)
+        assert GENERATED_MARKER in content
+
+    def test_ref_only(self) -> None:
+        content = _build_library_skill("FastAPI", "API reference text", None)
+        assert "Official Documentation" in content
+        assert "API reference text" in content
+        assert "Code Examples" not in content
+
+    def test_exa_only(self) -> None:
+        content = _build_library_skill("Stripe", None, "Code example text")
+        assert "No documentation pre-fetched" in content
+        assert "Code Examples & Patterns" in content
+        assert "Code example text" in content
+
+    def test_quick_reference_section(self) -> None:
+        content = _build_library_skill("Supabase", "Docs", None)
+        assert "Quick Reference" in content
+        assert "supabase.com/docs" in content
+
+    def test_under_500_lines_with_large_content(self) -> None:
+        large_ref = "Line of documentation.\n" * 600
+        content = _build_library_skill("Next.js", large_ref, "Some examples")
+        line_count = content.count("\n") + 1
+        assert line_count <= 500
+
+
+class TestSlugifyLibrary:
+    """Tests for library name slugification."""
+
+    def test_known_library(self) -> None:
+        assert _slugify_library("Next.js") == "nextjs-docs"
+
+    def test_unknown_library(self) -> None:
+        assert _slugify_library("MyCustomLib") == "mycustomlib-docs"
+
+    def test_library_with_spaces(self) -> None:
+        assert _slugify_library("React Native") == "react-native-docs"
+
+    def test_library_with_dots(self) -> None:
+        assert _slugify_library("Auth.js") == "authjs-docs"
