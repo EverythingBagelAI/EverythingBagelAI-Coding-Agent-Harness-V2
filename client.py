@@ -23,6 +23,7 @@ BUILTIN_TOOLS = [
     "Glob",
     "Grep",
     "Bash",
+    "Skill",
 ]
 
 
@@ -72,8 +73,13 @@ def create_client(
     for server_name in mcp_servers:
         allowed_tools.append(f"mcp__{server_name}__*")
 
-    # Build dynamic system prompt (or use override)
-    system_prompt = system_prompt_override or build_dynamic_system_prompt(ecosystem, mode)
+    # Build harness instructions to append to Claude Code's preset system prompt
+    harness_instructions = system_prompt_override or build_dynamic_system_prompt(ecosystem, mode)
+    system_prompt = {
+        "type": "preset",
+        "preset": "claude_code",
+        "append": harness_instructions,
+    }
 
     # Print client configuration summary
     print("Client Configuration:")
@@ -84,12 +90,14 @@ def create_client(
     if ecosystem.disallowed_tools:
         print(f"   - Disallowed tools: {len(ecosystem.disallowed_tools)}")
     print(f"   - Bash allowlist: {len(ecosystem.merged_allowed_commands)} commands")
+    print(f"   - Setting sources: user, project")
     print()
 
     return ClaudeSDKClient(
         options=ClaudeAgentOptions(
             model=model,
             system_prompt=system_prompt,
+            setting_sources=["user", "project"],
             allowed_tools=allowed_tools,
             disallowed_tools=ecosystem.disallowed_tools,
             mcp_servers=mcp_servers,
