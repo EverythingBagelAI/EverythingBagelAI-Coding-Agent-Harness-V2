@@ -1270,3 +1270,79 @@ def _fetch_all_library_docs(
 
     _save_skill_docs_cache(cache_path, cache)
     return results
+
+
+# ---------------------------------------------------------------------------
+# Library Skill Assembler (Step 3)
+# ---------------------------------------------------------------------------
+
+MAX_SKILL_LINES = 500
+
+
+def _build_library_skill(
+    library: str,
+    ref_content: str | None,
+    exa_content: str | None,
+) -> str:
+    """
+    Assemble a library documentation SKILL.md from fetched content.
+
+    Returns the full skill content with YAML frontmatter, harness marker,
+    and documentation/example sections. Enforces MAX_SKILL_LINES limit.
+    """
+    slug = _slugify_library(library)
+    meta = _LIBRARY_METADATA.get(library, {})
+    docs_url = meta.get("url", "")
+    package = meta.get("package", "")
+
+    description = (
+        f"{library} documentation and patterns. Reference for API usage, "
+        f"configuration, and common patterns. Use when implementing or "
+        f"modifying code that uses {library}."
+    )
+
+    sections: list[str] = [
+        _frontmatter(slug, description),
+        f"# {library} — Documentation Reference\n",
+    ]
+
+    # Official Documentation section
+    if ref_content:
+        sections.append(f"## Official Documentation\n\n{ref_content}")
+    else:
+        note = f"No documentation pre-fetched. Use `ref_search_documentation` to look up {library} docs."
+        sections.append(f"## Official Documentation\n\n{note}")
+
+    # Code Examples section
+    if exa_content:
+        sections.append(f"## Code Examples & Patterns\n\n{exa_content}")
+
+    # Quick Reference section (always present)
+    quick_ref = "## Quick Reference\n"
+    if docs_url:
+        quick_ref += f"\n- Docs: {docs_url}"
+    if package:
+        quick_ref += f"\n- Package: `{package}`"
+    sections.append(quick_ref)
+
+    # Further Reading fallback
+    if not ref_content and not exa_content and docs_url:
+        sections.append(f"## Further Reading\n\nSee the official documentation at {docs_url}")
+
+    content = "\n\n".join(sections)
+
+    # Enforce line limit — truncate exa content first, then ref content
+    lines = content.split("\n")
+    if len(lines) > MAX_SKILL_LINES and exa_content:
+        # Remove exa section and rebuild
+        content = _build_library_skill(library, ref_content, None)
+        lines = content.split("\n")
+
+    if len(lines) > MAX_SKILL_LINES:
+        # Hard truncate with note
+        lines = lines[:MAX_SKILL_LINES - 3]
+        lines.append("")
+        lines.append(f"*Content truncated. See full docs at {docs_url or 'the official documentation'}.*")
+        content = "\n".join(lines)
+
+    return content
