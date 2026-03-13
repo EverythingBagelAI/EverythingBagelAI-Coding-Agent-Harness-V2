@@ -84,7 +84,7 @@ async def _validate_epic_completion(
     project_name = await get_project_name(project_id)
     if project_name:
         # Use word boundaries to prevent "Epic 1" matching "Epic 10"
-        pattern = rf"\bepic[\s_-]0*{epic_number}\b"
+        pattern = rf"\bepic[\s_-]0*{epic_number}(?!\d)"
         if not re.search(pattern, project_name, re.IGNORECASE):
             return False, (
                 f"Linear project name '{project_name}' does not reference epic {epic_number}. "
