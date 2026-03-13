@@ -53,13 +53,13 @@ from security import configure_allowed_commands
 
 MAX_ISSUE_RETRIES = 3
 MAX_NO_ISSUE_RETRIES = 50
+MAX_VALIDATION_RETRIES = 3
 
 
 async def _validate_epic_completion(
     project_dir: Path,
     project_id: str,
     epic_number: int,
-    epic_name: str,
 ) -> tuple[bool, str]:
     """
     Validate that an epic can be marked complete.
@@ -87,6 +87,8 @@ async def _validate_epic_completion(
 
     # Check 2: Linear project name contains epic number (word-boundary match)
     project_name = await get_project_name(project_id)
+    if not project_name:
+        logger.warning("Could not fetch project name for %s — skipping name validation", project_id)
     if project_name:
         # Use word boundaries to prevent "Epic 1" matching "Epic 10"
         pattern = rf"\bepic[\s_-]0*{epic_number}(?!\d)"
@@ -384,7 +386,6 @@ async def run_epic_mode(
     # --- Epic loop ---
     total_issues_resolved = 0
     epics_completed = 0
-    MAX_VALIDATION_RETRIES = 3
     validation_failures = 0
 
     while True:
@@ -444,7 +445,7 @@ async def run_epic_mode(
 
         # --- Validate before marking complete ---
         is_valid, reason = await _validate_epic_completion(
-            project_dir, project_id, epic_number, epic_name,
+            project_dir, project_id, epic_number,
         )
         if not is_valid:
             validation_failures += 1
