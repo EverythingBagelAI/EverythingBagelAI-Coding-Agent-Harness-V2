@@ -226,7 +226,7 @@ async def run_epic_initializer_session(
             data = json.loads(marker_path.read_text())
             project_id = data.get("project_id")
             if project_id:
-                set_linear_project_id(project_dir, project_id)
+                set_linear_project_id(project_dir, project_id, epic_number)
                 set_current_epic(project_dir, epic_number, epic_name)
                 print(f"  Linear project ID: {project_id}")
                 return project_id

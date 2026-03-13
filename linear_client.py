@@ -6,6 +6,7 @@ The agent continues to use the Linear MCP for issue management.
 
 import asyncio
 import logging
+import re
 from typing import Optional
 
 import httpx
@@ -120,6 +121,12 @@ async def _get_all_issues(project_id: str) -> list[dict]:
     return all_issues
 
 
+def _parse_issue_sequence(title: str) -> int:
+    """Extract the [NN] sequence number from an issue title. Returns 999 if not found."""
+    match = re.match(r"\[(\d+)\]", title)
+    return int(match.group(1)) if match else 999
+
+
 def filter_current_issue(issues: list[dict]) -> Optional[dict]:
     """Filter pre-fetched issues to find the highest-priority incomplete non-meta issue."""
     eligible = []
@@ -138,7 +145,7 @@ def filter_current_issue(issues: list[dict]) -> Optional[dict]:
         eligible.append(issue)
     if not eligible:
         return None
-    eligible.sort(key=lambda i: i.get("priority", 0) or 999)
+    eligible.sort(key=lambda i: (_parse_issue_sequence(i["title"]), i.get("priority", 0) or 999))
     return eligible[0]
 
 
@@ -277,6 +284,21 @@ async def verify_all_issues_complete(project_id: str) -> tuple[bool, int, int]:
         if issue.get("state", {}).get("type", "") in ("completed", "cancelled"):
             completed += 1
     return (completed == total and total > 0, completed, total)
+
+
+async def get_project_name(project_id: str) -> str | None:
+    """Fetch the project name from Linear by ID."""
+    query = """
+    query GetProject($id: String!) {
+        project(id: $id) { name }
+    }
+    """
+    try:
+        data = await _query(query, {"id": project_id})
+        return data.get("project", {}).get("name")
+    except Exception as e:
+        logger.warning("Could not fetch project name for %s: %s", project_id, e)
+        return None
 
 
 async def get_all_issues_complete(project_id: str) -> bool:

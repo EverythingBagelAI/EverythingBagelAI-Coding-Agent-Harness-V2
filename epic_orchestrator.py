@@ -9,6 +9,7 @@ the agent is responsible for reasoning and implementation only.
 
 import asyncio
 import logging
+import re
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -24,6 +25,7 @@ from linear_client import (
     filter_human_gate_issue,
     filter_all_issues_complete,
     filter_snapshot_issue,
+    get_project_name,
     is_human_gate_resolved,
     set_issue_in_progress,
     verify_all_issues_complete,
@@ -36,6 +38,10 @@ from progress import (
     get_current_epic,
     get_human_gate_issue_id,
     get_linear_project_id,
+    get_linear_project_epic,
+    get_coding_sessions_run,
+    increment_coding_sessions,
+    reset_coding_sessions,
     set_current_epic,
     set_human_gate,
     clear_human_gate,
@@ -47,6 +53,65 @@ from security import configure_allowed_commands
 
 MAX_ISSUE_RETRIES = 3
 MAX_NO_ISSUE_RETRIES = 50
+
+
+async def _validate_epic_completion(
+    project_dir: Path,
+    project_id: str,
+    epic_number: int,
+    epic_name: str,
+) -> tuple[bool, str]:
+    """
+    Validate that an epic can be marked complete.
+    Returns (is_valid, reason) — reason explains why validation failed.
+
+    Checks:
+    1. Project ID is scoped to this epic (not stale from a previous one)
+    2. Linear project name contains the epic number
+    3. At least 1 non-meta issue exists in the project
+    4. All non-meta issues are completed
+    5. At least 1 coding session was run for this epic
+    """
+    # Check 1: Epic-scoped project ID
+    stored_epic = get_linear_project_epic(project_dir)
+    if stored_epic is not None and stored_epic != epic_number:
+        return False, (
+            f"Project ID is scoped to epic {stored_epic}, but current epic is {epic_number}. "
+            "Stale project ID detected."
+        )
+
+    # Check 2: Linear project name contains epic number (word-boundary match)
+    project_name = await get_project_name(project_id)
+    if project_name:
+        # Use word boundaries to prevent "Epic 1" matching "Epic 10"
+        pattern = rf"\bepic[\s_-]0*{epic_number}\b"
+        if not re.search(pattern, project_name, re.IGNORECASE):
+            return False, (
+                f"Linear project name '{project_name}' does not reference epic {epic_number}. "
+                "This project ID may belong to a different epic."
+            )
+
+    # Check 3 & 4: Issues exist and are all complete
+    all_done, done_count, total_count = await verify_all_issues_complete(project_id)
+    if total_count == 0:
+        return False, (
+            f"Linear project has 0 non-meta issues. "
+            f"Epic {epic_number} issues were never created."
+        )
+    if not all_done:
+        return False, (
+            f"Linear verification failed: {done_count}/{total_count} issues complete."
+        )
+
+    # Check 5: At least 1 coding session ran
+    sessions_run = get_coding_sessions_run(project_dir)
+    if sessions_run == 0:
+        return False, (
+            f"Zero coding sessions ran for epic {epic_number}. "
+            "Cannot mark complete without doing work."
+        )
+
+    return True, "All validation checks passed"
 
 
 async def _run_coding_loop(
@@ -202,6 +267,10 @@ async def _run_coding_loop(
         async with client:
             status, response = await run_agent_session_with_timeout(client, prompt, project_dir)
 
+        # Track that a coding session ran for this epic
+        if status != "error":
+            increment_coding_sessions(project_dir)
+
         if status == "error":
             print("\nSession encountered an error. Will retry...")
 
@@ -310,6 +379,8 @@ async def run_epic_mode(
     # --- Epic loop ---
     total_issues_resolved = 0
     epics_completed = 0
+    MAX_VALIDATION_RETRIES = 3
+    validation_failures = 0
 
     while True:
         epic_number = get_next_pending_epic(project_dir)
@@ -327,7 +398,26 @@ async def run_epic_mode(
         # --- Check if we already have a project ID (resuming mid-epic) ---
         project_id = get_linear_project_id(project_dir)
 
+        # Validate stored project ID is scoped to this epic (not stale)
+        if project_id:
+            stored_epic = get_linear_project_epic(project_dir)
+            if stored_epic is not None and stored_epic != epic_number:
+                logger.warning(
+                    "Stored project ID belongs to epic %s, not current epic %s — clearing stale state",
+                    stored_epic, epic_number,
+                )
+                project_id = None
+
         if not project_id:
+            # Clean up stale marker file from previous epic to prevent ID reuse
+            stale_marker = project_dir / ".linear_project.json"
+            if stale_marker.exists():
+                logger.info("Removing stale .linear_project.json before Epic %s initializer", epic_number)
+                stale_marker.unlink()
+
+            # Reset session counter for fresh epic
+            reset_coding_sessions(project_dir)
+
             # Run Epic Initializer
             project_id = await run_epic_initializer_session(
                 project_dir, model, epic_number, epic_name, ecosystem
@@ -347,13 +437,21 @@ async def run_epic_mode(
         if should_stop:
             return
 
-        # Verify with Linear before marking complete (never trust local state alone)
-        all_done, done_count, total_count = await verify_all_issues_complete(project_id)
-        if not all_done:
-            print(f"\n  Linear verification failed: {done_count}/{total_count} issues complete.")
-            print("  Local state may be out of sync. Re-running coding loop.")
-            continue  # Re-enter the while loop instead of marking complete
+        # --- Validate before marking complete ---
+        is_valid, reason = await _validate_epic_completion(
+            project_dir, project_id, epic_number, epic_name,
+        )
+        if not is_valid:
+            validation_failures += 1
+            if validation_failures >= MAX_VALIDATION_RETRIES:
+                print(f"\n  Epic {epic_number} validation failed {MAX_VALIDATION_RETRIES} times. Stopping.")
+                print(f"  Last reason: {reason}")
+                return
+            print(f"\n  Epic {epic_number} completion BLOCKED ({validation_failures}/{MAX_VALIDATION_RETRIES}): {reason}")
+            print("  Re-running coding loop to resolve.")
+            continue
 
+        validation_failures = 0  # Reset on success
         total_issues_resolved += epic_issues_resolved
         mark_epic_complete(project_dir, epic_number)
         epics_completed += 1

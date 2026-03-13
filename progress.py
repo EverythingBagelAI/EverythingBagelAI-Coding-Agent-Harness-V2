@@ -140,8 +140,10 @@ def _read_epic_state(project_dir: Path) -> dict:
         "current_epic": None,
         "current_epic_name": None,
         "linear_project_id": None,
+        "linear_project_epic": None,
         "epic_status": {},
         "human_gate_issue_id": None,
+        "coding_sessions_run": 0,
     }
 
     pf = _progress_file(project_dir)
@@ -191,6 +193,13 @@ def _read_epic_state(project_dir: Path) -> dict:
                 state["epic_status"] = {}
         elif key == "human_gate_issue_id":
             state["human_gate_issue_id"] = value if value != "null" else None
+        elif key == "linear_project_epic":
+            state["linear_project_epic"] = int(value) if value != "null" else None
+        elif key == "coding_sessions_run":
+            try:
+                state["coding_sessions_run"] = int(value)
+            except (ValueError, TypeError):
+                state["coding_sessions_run"] = 0
 
     return state
 
@@ -205,8 +214,10 @@ def _write_epic_state(project_dir: Path, state: dict) -> None:
         f"current_epic: {state['current_epic'] if state['current_epic'] is not None else 'null'}",
         f"current_epic_name: {state['current_epic_name'] if state['current_epic_name'] is not None else 'null'}",
         f"linear_project_id: {state['linear_project_id'] if state['linear_project_id'] is not None else 'null'}",
+        f"linear_project_epic: {state['linear_project_epic'] if state['linear_project_epic'] is not None else 'null'}",
         f"epic_status: {json.dumps(state['epic_status'])}",
         f"human_gate_issue_id: {state['human_gate_issue_id'] if state['human_gate_issue_id'] is not None else 'null'}",
+        f"coding_sessions_run: {state['coding_sessions_run']}",
         EPIC_STATE_END,
     ]
     block = "\n".join(block_lines)
@@ -248,13 +259,15 @@ def set_current_epic(project_dir: Path, epic_number: int, epic_name: str) -> Non
 
 
 def mark_epic_complete(project_dir: Path, epic_number: int) -> None:
-    """Mark an epic complete and clear current_epic_number."""
+    """Mark an epic complete and clear all per-epic state."""
     logger.info("Marking epic %s complete", epic_number)
     state = _read_epic_state(project_dir)
     state["epic_status"][str(epic_number)] = "complete"
     state["current_epic"] = None
     state["current_epic_name"] = None
     state["linear_project_id"] = None
+    state["linear_project_epic"] = None
+    state["coding_sessions_run"] = 0
     _write_epic_state(project_dir, state)
 
 
@@ -274,11 +287,13 @@ def clear_human_gate(project_dir: Path) -> None:
     _write_epic_state(project_dir, state)
 
 
-def set_linear_project_id(project_dir: Path, project_id: str) -> None:
-    """Store the Linear project ID for the current epic."""
-    logger.info("Linear project ID set: %s", project_id)
+def set_linear_project_id(project_dir: Path, project_id: str, epic_number: int | None = None) -> None:
+    """Store the Linear project ID and its associated epic number."""
+    logger.info("Linear project ID set: %s (epic %s)", project_id, epic_number)
     state = _read_epic_state(project_dir)
     state["linear_project_id"] = project_id
+    if epic_number is not None:
+        state["linear_project_epic"] = epic_number
     _write_epic_state(project_dir, state)
 
 
@@ -300,8 +315,40 @@ def get_human_gate_issue_id(project_dir: Path) -> str | None:
     return state["human_gate_issue_id"]
 
 
+def get_linear_project_epic(project_dir: Path) -> int | None:
+    """Retrieve the epic number associated with the stored project ID."""
+    state = _read_epic_state(project_dir)
+    return state.get("linear_project_epic")
+
+
+def increment_coding_sessions(project_dir: Path) -> int:
+    """Increment and return the coding session counter for the current epic."""
+    state = _read_epic_state(project_dir)
+    state["coding_sessions_run"] = state.get("coding_sessions_run", 0) + 1
+    _write_epic_state(project_dir, state)
+    return state["coding_sessions_run"]
+
+
+def get_coding_sessions_run(project_dir: Path) -> int:
+    """Retrieve the coding session counter for the current epic."""
+    state = _read_epic_state(project_dir)
+    return state.get("coding_sessions_run", 0)
+
+
+def reset_coding_sessions(project_dir: Path) -> None:
+    """Reset the coding session counter (called when starting a new epic)."""
+    state = _read_epic_state(project_dir)
+    state["coding_sessions_run"] = 0
+    _write_epic_state(project_dir, state)
+
+
 def get_next_pending_epic(project_dir: Path) -> int | None:
-    """Return the number of the next epic with status 'pending', or None if all complete."""
+    """
+    Return the number of the next epic with status 'pending', or None if all complete.
+
+    Enforces strict sequential order: epic N cannot be pending unless all epics
+    before it (in index order) are marked complete. This prevents skipping epics.
+    """
     state = _read_epic_state(project_dir)
     index = load_epic_index(project_dir)
 
@@ -309,6 +356,14 @@ def get_next_pending_epic(project_dir: Path) -> int | None:
         num = str(epic["number"])
         status = state["epic_status"].get(num, "pending")
         if status == "pending":
+            return epic["number"]
+        if status != "complete":
+            # This epic is in_progress or some other non-complete state.
+            # Do not skip it — return it so the loop re-enters for this epic.
+            logger.info(
+                "Epic %s has status '%s' (not complete) — cannot advance past it",
+                num, status,
+            )
             return epic["number"]
 
     return None
