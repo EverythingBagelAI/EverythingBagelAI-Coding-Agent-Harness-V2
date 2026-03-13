@@ -74,7 +74,12 @@ async def _validate_epic_completion(
     """
     # Check 1: Epic-scoped project ID
     stored_epic = get_linear_project_epic(project_dir)
-    if stored_epic is not None and stored_epic != epic_number:
+    if stored_epic is None:
+        logger.warning(
+            "linear_project_epic is None — epic scope check skipped for epic %s",
+            epic_number,
+        )
+    elif stored_epic != epic_number:
         return False, (
             f"Project ID is scoped to epic {stored_epic}, but current epic is {epic_number}. "
             "Stale project ID detected."
