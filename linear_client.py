@@ -270,7 +270,8 @@ async def set_issue_in_progress(issue_id: str) -> bool:
 
 async def verify_all_issues_complete(project_id: str) -> tuple[bool, int, int]:
     """
-    Verify with Linear API that ALL non-meta issues are completed.
+    Verify with Linear API that ALL work issues are completed.
+    Skips META, HUMAN GATE, and SNAPSHOT issues (same as filter_all_issues_complete).
     Returns (all_complete, completed_count, total_count).
     """
     issues = await _get_all_issues(project_id)
@@ -278,7 +279,11 @@ async def verify_all_issues_complete(project_id: str) -> tuple[bool, int, int]:
     completed = 0
     for issue in issues:
         title_upper = issue["title"].upper()
-        if title_upper.startswith(META_MARKER):
+        if (
+            title_upper.startswith(META_MARKER)
+            or title_upper.startswith(HUMAN_GATE_MARKER)
+            or title_upper.startswith(SNAPSHOT_MARKER)
+        ):
             continue
         total += 1
         if issue.get("state", {}).get("type", "") in ("completed", "cancelled"):
