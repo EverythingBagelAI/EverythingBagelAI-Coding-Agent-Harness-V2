@@ -106,30 +106,63 @@ Query format: write a full sentence or question, not keywords. Good: "How do I c
 
 When you reach the `[SNAPSHOT]` issue:
 
-1. Review all commits made in this epic (`git log --oneline` since epic start)
-2. Identify any deviations from the original epic spec — things you built differently, APIs you changed, patterns you established
-3. Install Playwright and run the full E2E suite:
-   ```bash
-   npx playwright install chromium
-   npx playwright test
-   ```
-   Also run the full API test suite. Fix failures caused by this epic's code. Log failures from previous epics as regression issues — do not block.
-4. Append to `build_deviations.md` (create if it doesn't exist):
-   ```
-   ## Epic N: [Name] — completed [date]
-   - [One bullet per deviation or significant decision. Format: "Changed X to Y because Z"]
-   - [If no deviations: "No deviations from spec"]
-   ```
-5. Append to `shared_context.md`:
-   ```
-   ## Epic N Additions
-   - [New API endpoints created]
-   - [New data model changes]
-   - [New patterns/utilities established]
-   - [Key architectural decisions]
-   ```
-6. Commit both files: `git add -A && git commit -m "chore: epic N snapshot"`
-7. Mark the Snapshot issue Done
+### Step 1: Review epic commits
+
+Run `git log --oneline` and identify all commits from this epic.
+
+### Step 2: Run tests
+
+**If test files exist** (check for `*.spec.ts`, `*.test.ts`, `tests/` directory):
+- Install Playwright if E2E tests exist: `npx playwright install chromium`
+- Run E2E tests: `npx playwright test`
+- Run API tests if they exist
+- Fix failures caused by THIS epic's code
+- Log failures from PREVIOUS epics as new Linear issues — do not block the snapshot
+
+**If NO test files exist:**
+- Create a basic E2E test scaffold at `tests/e2e/smoke.spec.ts` that:
+  - Navigates to the home page and verifies it loads (status 200)
+  - Navigates to the sign-in page and verifies the Clerk widget renders
+  - Navigates to a protected route and verifies redirect to sign-in
+- Create a basic API test at `tests/api/health.test.ts` that hits `GET /api/health` and checks for 200
+- Run the tests to verify they pass
+- Commit the test files: `git add -A && git commit -m "test: add basic smoke tests"`
+
+### Step 3: Update build_deviations.md
+
+Append to `build_deviations.md` (create if it doesn't exist):
+```
+## Epic N: [Name] — completed [date]
+- [One bullet per deviation from the original spec. Format: "Changed X to Y because Z"]
+- [If no deviations: "No deviations from spec"]
+```
+
+### Step 4: Update shared_context.md (CONCISE — max 30 lines)
+
+Append a section to `shared_context.md`. This section must be **30 lines or fewer**. Future agents will have this loaded into every session, so keep it tight. Only include things that would cause bugs or wasted work if a future epic agent didn't know about them.
+
+**Include:**
+- New API endpoints or Edge Functions created (just name + purpose, no signatures)
+- Data model changes (new tables, new columns, changed relationships)
+- Key architectural decisions that deviate from the spec or establish new patterns
+- New environment variables required
+
+**Do NOT include:**
+- Component file paths (the agent can use Glob/Grep to find files)
+- Code snippets (the agent can read the actual files)
+- UI descriptions (the agent can read the components)
+- Anything already documented in previous sections of shared_context.md
+
+### Step 5: Save detailed review separately
+
+Write a comprehensive implementation review to `docs/epicN-review.md` (e.g., `docs/epic2-review.md`). This file is for human reference only — it does NOT get loaded into agent context. Include all the detailed documentation, code patterns, and file paths here.
+
+### Step 6: Commit and mark Done
+
+```bash
+git add -A && git commit -m "chore: epic N snapshot"
+```
+Mark the snapshot issue Done in Linear.
 
 ## The Human Gate Issue
 

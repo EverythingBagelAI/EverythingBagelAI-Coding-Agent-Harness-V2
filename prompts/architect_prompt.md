@@ -140,6 +140,13 @@ The cross-epic context that every Epic Initializer and coding agent will read. T
 
 5. **Human gates are derived, not invented** — look at what Epic N+1's external integrations and environment variables require. Only include setup steps that the agent genuinely cannot do itself (cannot create Clerk accounts, cannot generate Stripe API keys, cannot configure DNS). Do not include steps like "install dependencies" or "run migrations" — the agent handles these.
 
+   Each human gate's `steps` array must include **verification commands** alongside setup instructions. For each step, add a shell command the user can run to confirm the setup works before marking the gate Done. Examples:
+   - After adding an API key to `.env.local`: `grep CLERK_SECRET_KEY .env.local` to verify it's saved
+   - After creating an external service account: `curl -s -o /dev/null -w "%{http_code}" <service-endpoint>` to verify reachability
+   - After configuring a webhook: a curl command to test the endpoint responds correctly
+
+   This prevents the coding agent from hitting configuration errors when the next epic starts. Gates without verification commands lead to silent failures.
+
 6. **Ref usage is mandatory** — every epic brief's integrations must reference Ref for looking up documentation for specific libraries before implementing against them.
 
 7. **The shared_context.md is the single source of truth for cross-epic concerns** — do not repeat the full data model or design system in every epic brief. Reference shared_context.md instead.

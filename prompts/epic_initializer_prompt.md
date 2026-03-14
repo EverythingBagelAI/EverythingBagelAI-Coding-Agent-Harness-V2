@@ -31,6 +31,20 @@ Create issues in this order:
 3. A **Snapshot issue** — always the second-to-last issue. Title: `[SNAPSHOT] Update shared_context and build_deviations`. This is when the coding agent writes the epic's architectural summary.
 4. A **Human Gate issue** (if this is not the final epic) — always the very last issue. Copy the Human Gate section from the epic spec verbatim as the issue description. Title: `[HUMAN GATE] Setup required before Epic [N+1]`.
 
+### Human Gate Quality — Verification Commands
+
+When creating a human gate issue, the description must include:
+
+1. **What to set up** — the service, API key, or configuration needed
+2. **Step-by-step instructions** — where to go, what to click, what to copy
+3. **Verification commands** — shell commands the user can run to confirm everything works before marking the gate Done. For example:
+   - For API keys: `curl -s -o /dev/null -w "%{http_code}" <endpoint>` to verify the service is reachable
+   - For environment variables: `grep <VAR_NAME> <env_file>` to confirm the key is saved
+   - For MCP servers: `nslookup <hostname>` to verify DNS resolves
+   - For webhooks: a curl command to test the endpoint returns the expected status code
+
+The gate should not be marked Done until all verification commands pass. This prevents the coding agent from hitting configuration errors mid-epic.
+
 ## Issue Sizing — The Verification Boundary Principle
 
 Features in the epic spec are REQUIREMENTS, not issues. Your job is to group

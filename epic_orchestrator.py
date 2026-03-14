@@ -178,6 +178,10 @@ async def _run_coding_loop(
                     print(f"\n  Running Snapshot session for Epic {epic_number}...")
                     shared_context_file = project_dir / "shared_context.md"
                     context_mtime_before = shared_context_file.stat().st_mtime if shared_context_file.exists() else 0
+                    try:
+                        await set_issue_in_progress(snapshot_issue["id"])
+                    except Exception as e:
+                        logger.warning("Could not set snapshot issue to In Progress: %s", e)
                     snapshot_prompt = build_coding_agent_session_prompt(
                         project_dir, snapshot_issue, base_prompt
                     )
