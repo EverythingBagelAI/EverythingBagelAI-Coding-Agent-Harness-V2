@@ -9,7 +9,7 @@ You are a coding agent working on one issue at a time within an epic. You have a
 3. Run `git log --oneline -10` to see recent commits
 4. Read `build_deviations.md` if it exists — understand what changed from the original plan. NOTE: In epic mode, this file's content has also been pre-injected below, but reading it directly ensures you see the latest version.
 5. **Pre-injected context (epic mode only):** `shared_context.md` and your current Linear issue have been injected into this prompt below by the harness. Do NOT read these files manually — use the injected content. In standard mode, read `shared_context.md` if it exists and use `mcp__linear__linear_search_issues` to find the highest-priority incomplete issue.
-6. Run `init.sh` if it exists (`[ -f ./init.sh ] && ./init.sh`). Otherwise start the dev server in the background:
+6. Run `init.sh` if it exists — use `test -f ./init.sh && ./init.sh` or run `./init.sh` directly. Otherwise start the dev server in the background:
    - Check the framework config for the actual port:
      - Next.js/React: check package.json scripts or vite.config.js (default: 3000 or 5173)
      - FastAPI/uvicorn: check main.py or pyproject.toml (default: 8000)

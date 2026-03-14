@@ -537,41 +537,48 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
     # Additional validation for sensitive commands — check ALL pipe segments.
     # This covers pipe-bypass attacks like `cat foo | pkill bash` where the
     # dangerous command is not the first segment (S13 fix).
+    #
+    # Within each pipe segment, further split on && / || / ; to isolate
+    # the exact sub-segment containing the command.  This prevents compound
+    # commands like `[ -f ./init.sh ] && ./init.sh` from being validated
+    # as a single string (where tokens[0] would be "[" instead of "./init.sh").
     pipe_segments = [s.strip() for s in command.split("|")]
     for segment in pipe_segments:
         segment_cmds = extract_commands(segment)
         for cmd in segment_cmds:
             if cmd in COMMANDS_NEEDING_EXTRA_VALIDATION:
+                sub_segments = split_command_segments(segment)
+                validation_segment = get_command_for_validation(cmd, sub_segments) or segment
                 if cmd == "pkill":
-                    allowed, reason = validate_pkill_command(segment)
+                    allowed, reason = validate_pkill_command(validation_segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
                 elif cmd == "chmod":
-                    allowed, reason = validate_chmod_command(segment)
+                    allowed, reason = validate_chmod_command(validation_segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
                 elif cmd == "init.sh":
-                    allowed, reason = validate_init_script(segment)
+                    allowed, reason = validate_init_script(validation_segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
                 elif cmd == "rm":
-                    allowed, reason = validate_rm_command(segment)
+                    allowed, reason = validate_rm_command(validation_segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
                 elif cmd == "git":
-                    allowed, reason = validate_git_command(segment)
+                    allowed, reason = validate_git_command(validation_segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
                 elif cmd in ("mv", "cp", "sed", "awk"):
-                    allowed, reason = validate_file_command_paths(segment)
+                    allowed, reason = validate_file_command_paths(validation_segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
                 elif cmd in ("cat", "head", "tail", "grep", "find"):
-                    allowed, reason = validate_read_command(segment)
+                    allowed, reason = validate_read_command(validation_segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
                 elif cmd == "export":
-                    allowed, reason = validate_export_command(segment)
+                    allowed, reason = validate_export_command(validation_segment)
                     if not allowed:
                         return {"decision": "block", "reason": reason}
 

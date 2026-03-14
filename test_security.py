@@ -409,3 +409,21 @@ class TestValidateExport:
     def test_allows_normal_var(self):
         allowed, reason = validate_export_command("export MY_VAR=hello")
         assert allowed
+
+
+# ---------------------------------------------------------------------------
+# Compound command validation (Bug 1 regression tests)
+# ---------------------------------------------------------------------------
+
+class TestCompoundCommandValidation:
+    def test_bracket_init_sh_allowed(self):
+        """The exact command from coding_prompt.md that was crashing sessions."""
+        assert not is_blocked('[ -f ./init.sh ] && ./init.sh || echo "No init.sh"')
+
+    def test_test_init_sh_allowed(self):
+        """The cleaner form recommended in the updated prompt."""
+        assert not is_blocked("test -f ./init.sh && ./init.sh")
+
+    def test_bracket_malicious_sh_blocked(self):
+        """Compound command with malicious script is still blocked."""
+        assert is_blocked("[ -f ./init.sh ] && ./malicious.sh")

@@ -24,6 +24,9 @@ BUILTIN_TOOLS = [
     "Grep",
     "Bash",
     "Skill",
+    "WebSearch",
+    "TodoRead",
+    "TodoWrite",
 ]
 
 
