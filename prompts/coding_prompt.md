@@ -16,13 +16,13 @@ You are a coding agent working on one issue at a time within an epic. You have a
    - Use `lsof -i :<port>` to verify the server is listening before proceeding.
    - If this is a Node.js project (package.json exists):
      ```bash
-     npm run dev > /tmp/dev-server.log 2>&1 &
+     npm run dev > dev-server.log 2>&1 &
      sleep 3 && lsof -i :3000 > /dev/null 2>&1 || sleep 5
      echo "Dev server PID: $!"
      ```
    - If this is a Python project (manage.py, main.py, or app.py exists):
      ```bash
-     python main.py > /tmp/dev-server.log 2>&1 &   # or uvicorn/gunicorn as appropriate
+     python main.py > dev-server.log 2>&1 &   # or uvicorn/gunicorn as appropriate
      sleep 3
      echo "Dev server PID: $!"
      ```
@@ -43,6 +43,7 @@ For each issue:
 3. **Verify build** — run `npm run build` to catch TypeScript errors and import issues. Only mark an issue Done after the build passes. See "Testing Rules" below for when to run additional tests.
 
 4. **Commit** — `git add -A && git commit -m "feat: [issue title] — [one line description]"`
+   Use single-line commit messages only. Do not use subshells `$(...)` or heredocs `<<EOF` — they are blocked by the security layer.
    If git commit fails:
    1. Read the error message carefully
    2. Common causes: nothing staged (run git add -A first), merge conflict,

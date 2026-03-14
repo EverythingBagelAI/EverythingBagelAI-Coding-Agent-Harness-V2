@@ -56,6 +56,35 @@ Set these environment variables before running:
 
 **The harness configures the Linear MCP connection automatically using `LINEAR_API_KEY`. You do not need to set up Linear OAuth or the Linear MCP server manually.**
 
+### MCP Server Setup
+
+The coding agent can connect to external services during sessions. Here's what you might want to set up:
+
+**Ref (recommended)** — gives the agent access to up-to-date library documentation while it codes. Without it, the agent uses its training knowledge, which works but may be less accurate for newer APIs.
+
+1. Get an API key from [ref.tools/keys](https://ref.tools/keys)
+2. Add this to `~/.claude.json` on the machine running the harness (if the file already has content, merge this into the existing `mcpServers` section):
+
+```json
+{
+  "mcpServers": {
+    "ref": {
+      "type": "http",
+      "url": "https://api.ref.tools/mcp",
+      "headers": {
+        "x-ref-api-key": "YOUR_REF_API_KEY"
+      }
+    }
+  }
+}
+```
+
+3. To check it's reachable: `curl -s -o /dev/null -w "%{http_code}" https://api.ref.tools/mcp` — you should get `401`, which means the server is there (the API key is sent via the header, not by curl).
+
+**Exa (optional)** — provides code examples that get baked into library skills when the project is first set up. Just set the `EXA_API_KEY` environment variable (no config file changes needed). Get a key from [exa.ai](https://exa.ai). Without it, library skills use Ref docs only.
+
+**Linear** — handled automatically. The harness connects to Linear using your `LINEAR_API_KEY` environment variable. Nothing else to configure.
+
 ---
 
 ## Quick Start — V2 Epic Mode
