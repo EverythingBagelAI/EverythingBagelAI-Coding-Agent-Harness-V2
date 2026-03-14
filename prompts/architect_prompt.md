@@ -140,6 +140,8 @@ The cross-epic context that every Epic Initializer and coding agent will read. T
 
 5. **Human gates are derived, not invented** — look at what Epic N+1's external integrations and environment variables require. Only include setup steps that the agent genuinely cannot do itself (cannot create Clerk accounts, cannot generate Stripe API keys, cannot configure DNS). Do not include steps like "install dependencies" or "run migrations" — the agent handles these.
 
+   **Human gates are for manual setup only.** A gate must require a human to do something the agent cannot: create third-party accounts, generate API keys, configure OAuth apps, set up DNS, or make payments. If the only action is "verify things work" or "run these commands," that is NOT a gate — it belongs in the snapshot's verification checklist or the next epic's first issue. Do not create a gate between epics if no new credentials, accounts, or external configuration are needed for the next epic. If in doubt, leave the gate out — the snapshot's E2E tests will catch integration issues.
+
    Each human gate's `steps` array must include **verification commands** alongside setup instructions. For each step, add a shell command the user can run to confirm the setup works before marking the gate Done. Examples:
    - After adding an API key to `.env.local`: `grep CLERK_SECRET_KEY .env.local` to verify it's saved
    - After creating an external service account: `curl -s -o /dev/null -w "%{http_code}" <service-endpoint>` to verify reachability

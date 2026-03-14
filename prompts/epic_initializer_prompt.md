@@ -30,15 +30,16 @@ Create issues in this order:
    - Note of any Ref documentation to look up before implementing
 3. A **Snapshot issue** — always the second-to-last issue. Title: `[SNAPSHOT] Epic review, E2E tests, and context update`. Description must include the full acceptance criteria below:
 
-    ```
-    Acceptance criteria:
-    1. Run E2E tests (`npx playwright test`). If no test files exist, create basic smoke tests first (see coding prompt Step 2 for details). All tests must pass.
-    2. Update shared_context.md with a concise (max 40 lines) architectural summary of this epic — new endpoints, data model changes, key decisions, env vars, and a verification checklist.
-    3. Update build_deviations.md with any deviations from the original spec.
-    4. Save a detailed implementation review to docs/epicN-review.md (for human reference, not loaded into agent context).
-    5. npm run build passes.
-    ```
-4. A **Human Gate issue** (if this is not the final epic) — always the very last issue. Copy the Human Gate section from the epic spec verbatim as the issue description. Title: `[HUMAN GATE] Setup required before Epic [N+1]`.
+   ```
+   Acceptance criteria:
+   1. Run E2E tests (`npx playwright test`). If no test files exist, create basic smoke tests first (see coding prompt Step 2 for details). All tests must pass.
+   2. Update shared_context.md with a concise (max 40 lines) architectural summary of this epic — new endpoints, data model changes, key decisions, env vars, and a verification checklist.
+   3. Update build_deviations.md with any deviations from the original spec.
+   4. Save a detailed implementation review to docs/epicN-review.md (for human reference, not loaded into agent context).
+   5. npm run build passes.
+   ```
+
+4. A **Human Gate issue** (only if the epic spec contains a human gate section requiring manual setup) — always the very last issue. Do NOT create a gate issue if the epic spec has no human gate section or if the gate only asks to "verify" things without requiring new credentials, accounts, or external configuration. Verification belongs in the snapshot, not a gate. Copy the Human Gate section from the epic spec verbatim as the issue description. Title: `[HUMAN GATE] Setup required before Epic [N+1]`.
 
 ### Human Gate Quality — Verification Commands
 
@@ -202,7 +203,7 @@ Tool: `mcp__linear__linear_create_issue`
 Input:
 title: "[SNAPSHOT] Epic review, E2E tests, and context update"
 description: |
-    End-of-epic review and verification.
+End-of-epic review and verification.
 
     Acceptance criteria:
     1. Run E2E tests (`npx playwright test`). If no test files exist, create basic smoke tests first (see coding prompt Step 2 for details). All tests must pass.
