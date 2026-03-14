@@ -137,15 +137,16 @@ Append to `build_deviations.md` (create if it doesn't exist):
 - [If no deviations: "No deviations from spec"]
 ```
 
-### Step 4: Update shared_context.md (CONCISE — max 30 lines)
+### Step 4: Update shared_context.md (CONCISE — max 40 lines)
 
-Append a section to `shared_context.md`. This section must be **30 lines or fewer**. Future agents will have this loaded into every session, so keep it tight. Only include things that would cause bugs or wasted work if a future epic agent didn't know about them.
+Append a section to `shared_context.md`. This section must be **40 lines or fewer**. Future agents will have this loaded into every session, so keep it tight. Only include things that would cause bugs or wasted work if a future epic agent didn't know about them.
 
 **Include:**
 - New API endpoints or Edge Functions created (just name + purpose, no signatures)
 - Data model changes (new tables, new columns, changed relationships)
 - Key architectural decisions that deviate from the spec or establish new patterns
 - New environment variables required
+- A **verification checklist** — 5-10 bullet points of concrete user flows or behaviours that should work after this epic. These serve as regression test criteria for future epics. Format: `- [Flow description] → [expected result]`
 
 **Do NOT include:**
 - Component file paths (the agent can use Glob/Grep to find files)
