@@ -28,7 +28,16 @@ Create issues in this order:
    - Description of what to build
    - Specific acceptance criteria (copied/adapted from the epic spec's Testing Criteria)
    - Note of any Ref documentation to look up before implementing
-3. A **Snapshot issue** — always the second-to-last issue. Title: `[SNAPSHOT] Update shared_context and build_deviations`. This is when the coding agent writes the epic's architectural summary.
+3. A **Snapshot issue** — always the second-to-last issue. Title: `[SNAPSHOT] Epic review, E2E tests, and context update`. Description must include the full acceptance criteria below:
+
+    ```
+    Acceptance criteria:
+    1. Run E2E tests (`npx playwright test`). If no test files exist, create basic smoke tests first (see coding prompt Step 2 for details). All tests must pass.
+    2. Update shared_context.md with a concise (max 40 lines) architectural summary of this epic — new endpoints, data model changes, key decisions, env vars, and a verification checklist.
+    3. Update build_deviations.md with any deviations from the original spec.
+    4. Save a detailed implementation review to docs/epicN-review.md (for human reference, not loaded into agent context).
+    5. npm run build passes.
+    ```
 4. A **Human Gate issue** (if this is not the final epic) — always the very last issue. Copy the Human Gate section from the epic spec verbatim as the issue description. Title: `[HUMAN GATE] Setup required before Epic [N+1]`.
 
 ### Human Gate Quality — Verification Commands
@@ -187,7 +196,25 @@ Verify the development environment is working before starting feature work.
 priority: 1
 labelNames: ["setup"]
 
-### Example 3: Human Gate Issue
+### Example 3: Snapshot Issue
+
+Tool: `mcp__linear__linear_create_issue`
+Input:
+title: "[SNAPSHOT] Epic review, E2E tests, and context update"
+description: |
+    End-of-epic review and verification.
+
+    Acceptance criteria:
+    1. Run E2E tests (`npx playwright test`). If no test files exist, create basic smoke tests first (see coding prompt Step 2 for details). All tests must pass.
+    2. Update shared_context.md with a concise (max 40 lines) architectural summary — new endpoints, data model changes, key decisions, new env vars, and a verification checklist of 5-10 concrete user flows.
+    3. Update build_deviations.md with any deviations from the original spec.
+    4. Save a detailed implementation review to docs/epicN-review.md.
+    5. npm run build passes.
+
+priority: 4
+labelNames: ["snapshot"]
+
+### Example 4: Human Gate Issue
 
 Tool: `mcp__linear__linear_create_issue`
 Input:
