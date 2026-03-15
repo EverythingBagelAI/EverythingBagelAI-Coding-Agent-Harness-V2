@@ -267,12 +267,30 @@ def load_installed_plugins() -> list[PluginInfo]:
     return plugins
 
 
-def _extract_skill_description(skill_md: Path) -> str:
-    """Extract the description field from a SKILL.md YAML frontmatter."""
-    if not skill_md.is_file():
-        return ""
-    try:
-        content = skill_md.read_text(errors="replace")
+def _extract_skill_description(skill_dir: Path) -> str:
+    """
+    Extract description from a skill directory.
+
+    Tries files in order: SKILL.md, CLAUDE.md, README.md
+    For each file, tries:
+      1. YAML frontmatter `description:` field
+      2. First paragraph after # heading
+
+    Returns empty string if nothing found.
+    """
+    candidates = ["SKILL.md", "CLAUDE.md", "README.md"]
+
+    for filename in candidates:
+        filepath = skill_dir / filename
+        if not filepath.is_file():
+            continue
+
+        try:
+            content = filepath.read_text(errors="replace")
+        except (IOError, PermissionError):
+            continue
+
+        # Try 1: YAML frontmatter
         if content.startswith("---"):
             parts = content.split("---", 2)
             if len(parts) >= 3:
@@ -282,8 +300,33 @@ def _extract_skill_description(skill_md: Path) -> str:
                         desc = stripped.split(":", 1)[1].strip().strip('"').strip("'")
                         if desc and desc not in ("|", ">"):
                             return desc[:200] + "..." if len(desc) > 200 else desc
-    except (IOError, PermissionError):
-        pass
+
+        # Try 2: First paragraph after # heading
+        lines = content.splitlines()
+        found_heading = False
+        paragraph_lines: list[str] = []
+
+        for line in lines:
+            if line.strip() == "---":
+                continue
+
+            if not found_heading:
+                if line.startswith("# "):
+                    found_heading = True
+                continue
+
+            stripped = line.strip()
+            if stripped:
+                if stripped.startswith(("[", "<", "!", "```")):
+                    continue
+                paragraph_lines.append(stripped)
+            elif paragraph_lines:
+                break
+
+        if paragraph_lines:
+            desc = " ".join(paragraph_lines)
+            return desc[:200] + "..." if len(desc) > 200 else desc
+
     return ""
 
 
@@ -301,7 +344,7 @@ def load_user_skills() -> list[SkillInfo]:
     skills: list[SkillInfo] = []
     for entry in skills_dir.iterdir():
         if entry.is_dir() and not entry.name.startswith("."):
-            description = _extract_skill_description(entry / "SKILL.md")
+            description = _extract_skill_description(entry)
             skills.append(SkillInfo(
                 name=entry.name,
                 directory=str(entry),
