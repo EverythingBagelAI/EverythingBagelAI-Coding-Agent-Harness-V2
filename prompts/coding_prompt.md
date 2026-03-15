@@ -29,6 +29,26 @@ You are a coding agent working on one issue at a time within an epic. You have a
    - If neither applies, skip this step.
 7. Install backend test dependencies (safe to run even if already installed):
    `pip install pytest httpx pytest-asyncio 2>/dev/null || true`
+8. **Regression check (MANDATORY before new work):**
+   The previous session may have introduced bugs. Before implementing anything new,
+   you MUST verify the app still works:
+
+   Using Puppeteer MCP:
+   - `mcp__puppeteer__puppeteer_navigate` to the app's main page (e.g. http://localhost:3000)
+   - `mcp__puppeteer__puppeteer_screenshot` to confirm the page loads correctly
+   - Check for console errors
+
+   If the app is broken or shows console errors:
+   - Spend no more than 15 minutes fixing the regression
+   - Commit the fix separately: `git add -A && git commit -m "fix: [describe regression]"`
+   - If unresolved after 15 minutes, document it in a Linear comment and proceed
+
+   Then pick 1-2 previously completed features (check `shared_context.md` verification
+   checklist or recent git log) and verify they still work through the browser:
+   - Navigate to the feature
+   - Perform the core user action
+   - Take a screenshot to confirm
+   - If any regression is found, fix it before starting new work
 
 If the app is broken when you start, spend no more than 15 minutes attempting to fix the breakage before implementing anything new. If unresolved after 15 minutes, document the breakage in a comment, log it as a separate Linear issue if appropriate, and proceed with your assigned work. Commit any fix separately.
 
@@ -36,36 +56,73 @@ If the app is broken when you start, spend no more than 15 minutes attempting to
 
 For each issue:
 
-1. **Look up docs first** — if the issue mentions an external library, call `ref_search_documentation` with a specific query before writing any code. Read the most relevant result. Do not implement against libraries from memory.
+1. **Read the issue carefully** — understand the Feature Description, Test Steps,
+   Runtime Guardrails, and Acceptance Criteria. The Runtime Guardrails section
+   contains library-specific patterns looked up from documentation — follow them.
 
-2. **Implement** — write clean, typed code. Follow the patterns already established in the codebase. Check `shared_context.md` for the design system and existing patterns before creating new components or utilities.
+2. **Look up docs first** — if the issue mentions an external library, call
+   `ref_search_documentation` with a specific query before writing any code.
+   Read the most relevant result. Do not implement against libraries from memory.
 
-3. **Verify build** — run `npm run build` to catch TypeScript errors and import issues. Only mark an issue Done after the build passes. See "Testing Rules" below for when to run additional tests.
+3. **Implement** — write clean, typed code. Follow the patterns already established
+   in the codebase. Follow the Runtime Guardrails in the issue description.
+   Check `shared_context.md` for the design system and existing patterns before
+   creating new components or utilities.
 
-4. **Commit** — `git add -A && git commit -m "feat: [issue title] — [one line description]"`
-   Use single-line commit messages only. Do not use subshells `$(...)` or heredocs `<<EOF` — they are blocked by the security layer.
-   If git commit fails:
-   1. Read the error message carefully
-   2. Common causes: nothing staged (run git add -A first), merge conflict,
-      pre-commit hook failure
-   3. Fix the cause and retry
-   4. Do NOT mark the issue Done until git commit has succeeded
+4. **Verify build** — run `npm run build` to catch TypeScript errors and import issues.
 
-5. **Update Linear** — mark the issue Done. Add a comment with: what was implemented, any decisions made, any deviation from the issue description.
+5. **Verify in browser (CRITICAL)** — if the issue has Test Steps, you MUST verify
+   the feature through the actual UI using Puppeteer MCP:
+   - Follow each Test Step exactly as written
+   - Use `mcp__puppeteer__puppeteer_navigate` to go to the relevant page
+   - Use `mcp__puppeteer__puppeteer_click`, `mcp__puppeteer__puppeteer_fill`,
+     `mcp__puppeteer__puppeteer_select` to interact with the UI
+   - Use `mcp__puppeteer__puppeteer_screenshot` to capture visual state
+   - Check for console errors after each page navigation
 
-6. **Move to next issue** — do not start a new issue until the current one is committed and marked Done.
+   **DO:**
+   - Test through the UI with clicks and keyboard input
+   - Take screenshots to verify visual appearance
+   - Check for console errors in the browser
+   - Verify complete user workflows end-to-end
+   - Wait 5-10 seconds on pages with real-time features to check for
+     subscription churn or repeated console messages
+
+   **DON'T:**
+   - Only test with curl commands (backend testing alone is insufficient)
+   - Use JavaScript evaluation to bypass UI (no shortcuts)
+   - Skip visual verification
+   - Mark issues Done without browser verification (when Test Steps exist)
+
+   If Test Steps are NOT present in the issue (e.g. infrastructure, config, migrations),
+   verify using the method described in the Acceptance Criteria (bash commands, API calls, etc.).
+
+6. **Fix and re-verify** — if any Test Step fails, fix the issue and run through
+   the Test Steps again. Do not move on until all steps pass. This feedback loop
+   is critical — it catches bugs that aren't obvious from the code alone.
+
+7. **Commit** — `git add -A && git commit -m "feat: [issue title] — [one line description]"`
+
+8. **Update Linear** — mark the issue Done. Add a comment with: what was implemented,
+   any decisions made, any deviation from the issue description, and confirmation
+   that browser verification passed (or N/A for non-UI issues).
+
+9. **Move to next issue** — do not start a new issue until the current one is
+   committed and marked Done.
 
 ## Session Completion
 
 In epic mode, you work on exactly ONE issue per session. Your session ends when:
 
 1. You have implemented the issue completely
-2. `npm run build` passes (and any tagged tests pass, if applicable)
-3. You have committed the changes with a descriptive message
-4. You have marked the Linear issue as Done
+2. `npm run build` passes
+3. Browser verification passes (all Test Steps followed and confirmed via Puppeteer),
+   OR the issue has no Test Steps and acceptance criteria are met via other means
+4. Any tagged tests pass (if applicable)
+5. You have committed the changes with a descriptive message
+6. You have marked the Linear issue as Done
 
-After marking Done, STOP. Do not pick up the next issue. The harness will start a
-new session with a fresh context window for the next issue.
+After marking Done, STOP.
 
 ## Ref Documentation Usage
 
@@ -82,17 +139,17 @@ Query format: write a full sentence or question, not keywords. Good: "How do I c
 
 ## Testing Rules (Non-Negotiable)
 
-### Regular Issues (Default)
+### All Issues
 
-- Verify with `npm run build` ONLY — this catches TypeScript errors and import issues
-- Do NOT run `npx playwright test` on regular issues
-- Do NOT install Playwright unless this is a [SNAPSHOT] issue
-- If the issue creates/modifies an API endpoint, run the specific API test file only
+- `npm run build` must pass before marking Done
+- If the issue has **Test Steps**, verify through the browser using Puppeteer MCP
+  (see Implementation Loop step 5 above)
 
 ### Tagged Issues
 
-- If the issue description contains `[test:filename.spec.ts]`, run ONLY that test file
-- If the issue description contains `[test:api]`, run API tests only
+- If the issue description contains `[test:filename.spec.ts]`, ALSO run that
+  specific test file after browser verification passes
+- If the issue description contains `[test:api]`, ALSO run API tests
 
 ### Snapshot Issues
 
@@ -113,6 +170,7 @@ Run `git log --oneline` and identify all commits from this epic.
 ### Step 2: Run tests
 
 **If test files exist** (check for `*.spec.ts`, `*.test.ts`, `tests/` directory):
+
 - Install Playwright if E2E tests exist: `npx playwright install chromium`
 - Run E2E tests: `npx playwright test`
 - Run API tests if they exist
@@ -120,6 +178,7 @@ Run `git log --oneline` and identify all commits from this epic.
 - Log failures from PREVIOUS epics as new Linear issues — do not block the snapshot
 
 **If NO test files exist:**
+
 - Create a basic E2E test scaffold at `tests/e2e/smoke.spec.ts` that:
   - Navigates to the home page and verifies it loads (status 200)
   - Navigates to the sign-in page and verifies the Clerk widget renders
@@ -131,6 +190,7 @@ Run `git log --oneline` and identify all commits from this epic.
 ### Step 3: Update build_deviations.md
 
 Append to `build_deviations.md` (create if it doesn't exist):
+
 ```
 ## Epic N: [Name] — completed [date]
 - [One bullet per deviation from the original spec. Format: "Changed X to Y because Z"]
@@ -142,6 +202,7 @@ Append to `build_deviations.md` (create if it doesn't exist):
 Append a section to `shared_context.md`. This section must be **40 lines or fewer**. Future agents will have this loaded into every session, so keep it tight. Only include things that would cause bugs or wasted work if a future epic agent didn't know about them.
 
 **Include:**
+
 - New API endpoints or Edge Functions created (just name + purpose, no signatures)
 - Data model changes (new tables, new columns, changed relationships)
 - Key architectural decisions that deviate from the spec or establish new patterns
@@ -149,6 +210,7 @@ Append a section to `shared_context.md`. This section must be **40 lines or fewe
 - A **verification checklist** — 5-10 bullet points of concrete user flows or behaviours that should work after this epic. These serve as regression test criteria for future epics. Format: `- [Flow description] → [expected result]`
 
 **Do NOT include:**
+
 - Component file paths (the agent can use Glob/Grep to find files)
 - Code snippets (the agent can read the actual files)
 - UI descriptions (the agent can read the components)
@@ -163,6 +225,7 @@ Write a comprehensive implementation review to `docs/epicN-review.md` (e.g., `do
 ```bash
 git add -A && git commit -m "chore: epic N snapshot"
 ```
+
 Mark the snapshot issue Done in Linear.
 
 ## The Human Gate Issue
@@ -180,21 +243,71 @@ When you reach a `[HUMAN GATE]` issue:
 - Never use mock data or stub implementations that aren't marked with a TODO
 - Never suppress TypeScript errors with `any` or `@ts-ignore`
 - Never mark an issue Done without at minimum a passing `npm run build`
-- Never run `npx playwright test` on regular issues — only on [SNAPSHOT] issues or when tagged with `[test:...]`
-- Never install Playwright during regular issues — it wastes time and is only needed for [SNAPSHOT] issues
 - Never batch multiple issues into one commit
 - Never start a new issue while the previous one is uncommitted
 - Never create Linear issues — the harness manages these
 - Never declare the project or epic complete based on your own assessment — check Linear
+- Never mark an issue Done without browser verification (when Test Steps exist)
+- Never ignore console errors — they indicate real problems
+- Never put unstable references in reactive dependency arrays
+- Never call setState/state updates inside animation callbacks or tight loops
+- Never silently swallow errors from database queries or API calls
+
+## Runtime Quality Rules (All Projects)
+
+These apply regardless of tech stack. They prevent the most common runtime failures
+in agent-built applications:
+
+### Error Handling
+
+- Every external call (database query, API fetch, third-party service) must handle
+  errors explicitly. Never silently ignore failures — at minimum log them, preferably
+  show user-facing feedback.
+
+### Async Patterns
+
+- When multiple independent async operations need to run, ALWAYS use parallel
+  execution (Promise.all, asyncio.gather, etc.) — never sequential awaits for
+  independent work.
+
+### Subscription & Listener Cleanup
+
+- Every subscription, event listener, interval, or timer created in a component
+  lifecycle must have a corresponding cleanup/teardown. Verify cleanup actually
+  runs — no stale closures capturing old state.
+
+### State Update Discipline
+
+- Never trigger state updates inside tight loops, animation frame callbacks,
+  or high-frequency event handlers (scroll, mousemove, resize). Use refs,
+  throttling/debouncing, or batch updates instead.
+
+### Reference Stability
+
+- When passing objects, arrays, or callbacks as dependencies to reactive systems
+  (useEffect, watchers, computed properties), ensure they have stable references.
+  New references on every render/cycle cause infinite re-execution loops.
+
+### Data Fetching
+
+- Deduplicate identical data fetches — if multiple components need the same data,
+  lift the fetch to a shared parent, use a cache layer, or use framework-specific
+  deduplication (React.cache, SWR, TanStack Query).
+- Always filter queries to return only the data needed — don't fetch entire tables
+  and filter client-side.
 
 ## V1 Mode Limitation
 
 Note: In greenfield/brownfield mode, `build_deviations.md` is not maintained automatically. If you want to track architectural deviations, maintain it manually or switch to epic mode.
 
-## Clean State Rule
+## Quality Bar
 
-At the end of every session, the codebase must be in a state appropriate for merging to main:
+Your goal is a production-quality application. Every session must meet:
 
+- Zero console errors in the browser
+- All features work end-to-end through the UI
+- No visual glitches (white-on-white text, layout overflow, missing hover states)
+- Fast, responsive, professional
 - No uncommitted changes
 - No failing tests
 - No console.error calls left in production code
