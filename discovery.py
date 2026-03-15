@@ -36,8 +36,8 @@ CLAUDE_JSON = Path.home() / ".claude.json"
 SESSION_MCP_SCOPES: dict[str, list[str] | None] = {
     "architect": ["ref", "exa"],
     "epic_writer": ["ref", "exa"],
-    "epic_initializer": ["linear"],
-    "coding": ["linear", "ref"],
+    "epic_initializer": ["linear", "ref"],
+    "coding": ["linear", "ref", "puppeteer"],
     "initializer": None,
     "standard": None,
 }
@@ -675,6 +675,17 @@ def discover_user_ecosystem(
                 },
                 source="harness",
             ))
+
+    # Puppeteer MCP — browser verification for coding sessions
+    harness_servers.append(McpServerEntry(
+        name="puppeteer",
+        config={
+            "type": "stdio",
+            "command": "npx",
+            "args": ["-y", "puppeteer-mcp-server"],
+        },
+        source="harness",
+    ))
 
     # Merge all MCP servers
     merged_mcps = _merge_mcp_servers(
