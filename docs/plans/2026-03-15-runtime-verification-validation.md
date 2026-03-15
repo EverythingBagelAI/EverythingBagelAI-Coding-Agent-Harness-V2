@@ -94,6 +94,8 @@ Testing Criteria in the template (section 1) references runtime-behavioural crit
 
 The following checks require running the harness with a real project:
 
+### Runtime Verification (Checks 1–7)
+
 1. Epic writer produces spec with runtime testing criteria (at least 2 runtime-behavioural criteria for UI-facing epics)
 2. Epic initializer calls `ref_search_documentation` and generates Runtime Guardrails for each feature issue
 3. Coding agent follows Test Steps with Puppeteer MCP (navigate, click, screenshot, check console errors)
@@ -101,6 +103,13 @@ The following checks require running the harness with a real project:
 5. Browser verification catches console errors, subscription churn, and visual glitches
 6. Session-scoped MCP filtering correctly loads Puppeteer only for coding sessions (not architect, epic_writer, etc.)
 7. The Puppeteer MCP server starts successfully via npx in the harness environment
+
+### Skill Recommendations (Checks 8–11)
+
+8. `load_user_skills()` discovers skills from `~/.claude/skills/` with descriptions extracted from SKILL.md frontmatter
+9. `build_epic_initializer_context()` injects the "Available User Skills" block into the epic initializer's context when skills are present
+10. Epic initializer prompt contains "Recommended Skills" section in the issue format template and "Matching Skills to Issues" logic
+11. Coding prompt includes step 2 "Invoke recommended skills" in the Implementation Loop, with correct step renumbering (1–10)
 
 ## Summary
 
@@ -113,3 +122,7 @@ The following checks require running the harness with a real project:
 - Python syntax is valid.
 
 No issues found. Ready for manual integration testing with a real project.
+
+## Manual Validation Results
+
+<!-- Filled in during guided validation. Format: PASS/FAIL + evidence. -->
