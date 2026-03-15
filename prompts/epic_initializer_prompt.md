@@ -167,9 +167,14 @@ the specific best practices and anti-patterns from the documentation.]
 [If the Available User Skills section in the injected context lists skills
 relevant to this issue, list them here. The coding agent will invoke each
 one using the Skill tool before implementing. Only include skills that
-appear in the Available User Skills list.]
+appear in the Available User Skills list.
 
-- [skill-name] — [why it's relevant to this issue]
+List workflow/design skills FIRST (e.g. ui-ux-pro-max, frontend-design,
+database-reviewer), then library documentation skills (e.g. nextjs-docs,
+supabase-docs) as supplementary.]
+
+- [workflow-skill-name] — [why it's relevant] (primary)
+- [doc-skill-name] — [what to look up] (supplementary)
 
 If no available skills match the issue's work, omit this section entirely.
 ```
@@ -237,9 +242,17 @@ Runtime Guardrails:
 
 ## Matching Skills to Issues
 
-When the injected context includes an "Available User Skills" section, match
-skills to issues based on the type of work. Use the skill descriptions to
-determine relevance. Common mappings:
+When the injected context includes an "Available User Skills" section, you
+MUST check the table below for every issue you create. Do not skip this step.
+
+**Priority rule:** Workflow skills (ui-ux-pro-max, frontend-design,
+remotion-best-practices, security-reviewer, database-reviewer,
+test-driven-development) take priority over library documentation skills
+(*-docs). Library doc skills are supplementary — they provide reference
+material, but workflow skills shape how the agent builds. Always list
+workflow skills first.
+
+You MUST check this table for every issue:
 
 | Issue involves...                                       | Likely relevant skill   |
 | ------------------------------------------------------- | ----------------------- |
@@ -256,6 +269,28 @@ it's not in the table above.
 
 An issue can have multiple recommended skills (e.g. a dashboard page with
 database queries might recommend both `ui-ux-pro-max` and `database-reviewer`).
+
+### Skill Recommendation Examples
+
+**Issue: "Build responsive sidebar with navigation and active state"**
+Recommended Skills:
+- ui-ux-pro-max (primary — handles component design, responsiveness, layout)
+- frontend-design (primary — handles page layout patterns, design systems)
+- nextjs-docs (supplementary — for App Router link/navigation specifics)
+
+**Issue: "Create projects table migration with RLS policies"**
+Recommended Skills:
+- database-reviewer (primary — schema design, RLS policy correctness)
+- supabase-docs (supplementary — for Supabase-specific SQL syntax)
+
+**Issue: "Add animated hero section with scroll-triggered counters"**
+Recommended Skills:
+- ui-ux-pro-max (primary — visual design, spacing, typography)
+- frontend-design (primary — layout and responsive breakpoints)
+- remotion-best-practices (primary — if using Remotion for animation)
+
+Notice the pattern: workflow/design skills come first as primary, library
+documentation skills come last as supplementary.
 
 ### Test Tags
 
