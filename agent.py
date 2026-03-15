@@ -189,7 +189,7 @@ async def run_epic_initializer_session(
     print("=" * 70 + "\n")
 
     # Build context from files
-    context = build_epic_initializer_context(epic_number, project_dir)
+    context = build_epic_initializer_context(epic_number, project_dir, skills=ecosystem.skills)
 
     # Load the epic initializer system prompt
     system_prompt_text = get_epic_initializer_prompt()

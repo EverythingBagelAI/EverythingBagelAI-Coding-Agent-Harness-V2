@@ -60,18 +60,24 @@ For each issue:
    Runtime Guardrails, and Acceptance Criteria. The Runtime Guardrails section
    contains library-specific patterns looked up from documentation — follow them.
 
-2. **Look up docs first** — if the issue mentions an external library, call
+2. **Invoke recommended skills** — if the issue has a "Recommended Skills"
+   section, invoke each listed skill using the Skill tool before writing any
+   code. Follow any guidance, constraints, or patterns the skill provides.
+   This ensures specialised knowledge (UI/UX best practices, security patterns,
+   database optimisations) is loaded before you start implementing.
+
+3. **Look up docs first** — if the issue mentions an external library, call
    `ref_search_documentation` with a specific query before writing any code.
    Read the most relevant result. Do not implement against libraries from memory.
 
-3. **Implement** — write clean, typed code. Follow the patterns already established
+4. **Implement** — write clean, typed code. Follow the patterns already established
    in the codebase. Follow the Runtime Guardrails in the issue description.
    Check `shared_context.md` for the design system and existing patterns before
    creating new components or utilities.
 
-4. **Verify build** — run `npm run build` to catch TypeScript errors and import issues.
+5. **Verify build** — run `npm run build` to catch TypeScript errors and import issues.
 
-5. **Verify in browser (CRITICAL)** — if the issue has Test Steps, you MUST verify
+6. **Verify in browser (CRITICAL)** — if the issue has Test Steps, you MUST verify
    the feature through the actual UI using Puppeteer MCP:
    - Follow each Test Step exactly as written
    - Use `mcp__puppeteer__puppeteer_navigate` to go to the relevant page
@@ -97,18 +103,18 @@ For each issue:
    If Test Steps are NOT present in the issue (e.g. infrastructure, config, migrations),
    verify using the method described in the Acceptance Criteria (bash commands, API calls, etc.).
 
-6. **Fix and re-verify** — if any Test Step fails, fix the issue and run through
+7. **Fix and re-verify** — if any Test Step fails, fix the issue and run through
    the Test Steps again. Do not move on until all steps pass. This feedback loop
    is critical — it catches bugs that aren't obvious from the code alone.
 
-7. **Commit** — `git add -A && git commit -m "feat: [issue title] — [one line description]"`
+8. **Commit** — `git add -A && git commit -m "feat: [issue title] — [one line description]"`
 
-8. **Update Linear** — mark the issue Done. Add a comment with: what was implemented,
+9. **Update Linear** — mark the issue Done. Add a comment with: what was implemented,
    any decisions made, any deviation from the issue description, and confirmation
    that browser verification passed (or N/A for non-UI issues).
 
-9. **Move to next issue** — do not start a new issue until the current one is
-   committed and marked Done.
+10. **Move to next issue** — do not start a new issue until the current one is
+    committed and marked Done.
 
 ## Session Completion
 

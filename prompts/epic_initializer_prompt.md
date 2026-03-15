@@ -162,6 +162,16 @@ the specific best practices and anti-patterns from the documentation.]
 - [ ] [Specific, testable condition]
 - [ ] [Specific, testable condition]
 - [ ] [No console errors after 10 seconds on the page]
+
+## Recommended Skills
+[If the Available User Skills section in the injected context lists skills
+relevant to this issue, list them here. The coding agent will invoke each
+one using the Skill tool before implementing. Only include skills that
+appear in the Available User Skills list.]
+
+- [skill-name] — [why it's relevant to this issue]
+
+If no available skills match the issue's work, omit this section entirely.
 ```
 
 **IMPORTANT:** The last acceptance criterion for any UI issue must always be
@@ -224,6 +234,28 @@ Runtime Guardrails:
 - Check error before using data: if (error) throw/return error response
 - Use .select() to limit returned columns — never fetch entire rows unnecessarily
 - For multiple independent queries, use Promise.all([query1, query2])
+
+## Matching Skills to Issues
+
+When the injected context includes an "Available User Skills" section, match
+skills to issues based on the type of work. Use the skill descriptions to
+determine relevance. Common mappings:
+
+| Issue involves...                                       | Likely relevant skill   |
+| ------------------------------------------------------- | ----------------------- |
+| UI components, layouts, styling, design, responsiveness | ui-ux-pro-max           |
+| Video generation, Remotion compositions, animations     | remotion-best-practices |
+| Auth, payments, API keys, secrets, security patterns    | security-reviewer       |
+| Database schema, RLS policies, migrations, queries      | database-reviewer       |
+| Frontend pages, page layouts, design systems            | frontend-design         |
+
+These are examples — always check the actual Available User Skills list in the
+injected context. Only recommend skills that are present in that list. If a
+skill's description clearly matches the issue's domain, recommend it even if
+it's not in the table above.
+
+An issue can have multiple recommended skills (e.g. a dashboard page with
+database queries might recommend both `ui-ux-pro-max` and `database-reviewer`).
 
 ### Test Tags
 
@@ -331,6 +363,11 @@ Before implementing, use ref_search_documentation to look up:
 - [ ] Real-time: new notifications appear without page refresh
 - [ ] Clicking a notification marks it as read
 - [ ] No console errors or subscription churn after 10 seconds
+
+## Recommended Skills
+
+- ui-ux-pro-max — notification bell UI, dropdown layout, badge design
+- database-reviewer — Supabase Realtime subscription patterns
 
 [test:notifications.spec.ts]
 

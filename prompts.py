@@ -270,7 +270,30 @@ def _validate_spec_file_path(spec_file: str, project_dir: Path) -> Path:
     return resolved
 
 
-def build_epic_initializer_context(epic_number: int, project_dir: Path) -> str:
+def _format_available_skills(skills: list) -> str:
+    """Format discovered user skills as a context block for the epic initializer."""
+    if not skills:
+        return ""
+
+    lines = [
+        "## Available User Skills\n",
+        "The following skills are installed and available to the coding agent via the "
+        "Skill tool. When creating issues, recommend relevant skills based on the type "
+        "of work (see the Matching Skills to Issues section in your system prompt).\n",
+    ]
+
+    for skill in skills:
+        desc = f" — {skill.description}" if skill.description else ""
+        lines.append(f"- **{skill.name}**{desc}")
+
+    return "\n".join(lines)
+
+
+def build_epic_initializer_context(
+    epic_number: int,
+    project_dir: Path,
+    skills: list | None = None,
+) -> str:
     """
     Build the full context string injected into the Epic Initializer's user message.
 
@@ -323,6 +346,12 @@ def build_epic_initializer_context(epic_number: int, project_dir: Path) -> str:
     ref_docs = prefetch_ref_docs(epic_spec, project_dir=project_dir)
     if ref_docs:
         sections.append(ref_docs)
+
+    # 6. Available user skills
+    if skills:
+        skills_block = _format_available_skills(skills)
+        if skills_block:
+            sections.append(skills_block)
 
     header = (
         f"# Epic Initializer Context — Epic {epic_number}: {epic['name']}\n\n"

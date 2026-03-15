@@ -112,6 +112,7 @@ class SkillInfo(BaseModel):
     """Metadata about a user skill."""
     name: str
     directory: str
+    description: str = ""
 
 
 class BashCommandEntry(BaseModel):
@@ -266,12 +267,32 @@ def load_installed_plugins() -> list[PluginInfo]:
     return plugins
 
 
+def _extract_skill_description(skill_md: Path) -> str:
+    """Extract the description field from a SKILL.md YAML frontmatter."""
+    if not skill_md.is_file():
+        return ""
+    try:
+        content = skill_md.read_text(errors="replace")
+        if content.startswith("---"):
+            parts = content.split("---", 2)
+            if len(parts) >= 3:
+                for line in parts[1].splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith("description:"):
+                        desc = stripped.split(":", 1)[1].strip().strip('"').strip("'")
+                        if desc and desc not in ("|", ">"):
+                            return desc[:200] + "..." if len(desc) > 200 else desc
+    except (IOError, PermissionError):
+        pass
+    return ""
+
+
 def load_user_skills() -> list[SkillInfo]:
     """
     Load user skills from ~/.claude/skills/.
 
     Returns:
-        List of SkillInfo for all discovered skills
+        List of SkillInfo for all discovered skills (with descriptions)
     """
     skills_dir = CLAUDE_HOME / "skills"
     if not skills_dir.is_dir():
@@ -280,9 +301,11 @@ def load_user_skills() -> list[SkillInfo]:
     skills: list[SkillInfo] = []
     for entry in skills_dir.iterdir():
         if entry.is_dir() and not entry.name.startswith("."):
+            description = _extract_skill_description(entry / "SKILL.md")
             skills.append(SkillInfo(
                 name=entry.name,
                 directory=str(entry),
+                description=description,
             ))
 
     return skills
