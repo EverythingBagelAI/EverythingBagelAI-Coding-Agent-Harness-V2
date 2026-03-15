@@ -35,13 +35,24 @@ GOOD: "Create POST /api/auth/login endpoint with JWT response" / "Build Dashboar
 {Only the endpoints created or consumed in this epic. Method + path + one-line description.}
 
 ## External Integrations
-{List each MCP or third-party service used in this epic, with intent (not implementation):
-- Use Ref (`ref_search_documentation`) to look up documentation for [specific libraries used in this epic] before implementing
-- Use Playwright for all browser-based testing of features in this epic
+{List each MCP or third-party service used in this epic, with intent:
+- Use Ref (`ref_search_documentation`) to look up documentation for [specific libraries] before implementing
+- Use Puppeteer MCP for browser-based verification of all UI features in this epic
+- Use Playwright for E2E test suite at snapshot time
 - [Other MCPs by intent]}
 
 ## Testing Criteria
-{5-10 specific, machine-verifiable acceptance criteria. Format: "Given [state], when [action], then [outcome]".}
+{5-10 specific, machine-verifiable acceptance criteria.
+Format: "Given [state], when [action], then [outcome]".
+
+At least 2 criteria must be runtime-behavioural for UI-facing epics:
+- "No console errors when navigating between [pages in this epic]"
+- "Real-time subscriptions maintain a single stable connection (no subscribe/unsubscribe churn)"
+- "All pages in this epic load within 3 seconds"
+- "No infinite re-render loops (no repeated console warnings)"
+
+These runtime criteria guide the Epic Initializer when writing Test Steps
+and Runtime Guardrails for individual issues.}
 
 ## Human Gate
 {ONLY include this section for epics that are NOT the final epic}
